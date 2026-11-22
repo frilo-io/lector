@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Lector">
+<meta name="theme-color" content="#ffffff" id="themeColor">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<title>Lector</title>
+<script src="lib/jszip.min.js"></script>
+<style>
+@font-face{font-family:"Newsreader";font-style:normal;font-weight:400;font-display:swap;src:url(fonts/newsreader-latin-ext-400-normal.woff2) format("woff2");unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:"Newsreader";font-style:normal;font-weight:400;font-display:swap;src:url(fonts/newsreader-latin-400-normal.woff2) format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:"Newsreader";font-style:normal;font-weight:500;font-display:swap;src:url(fonts/newsreader-latin-ext-500-normal.woff2) format("woff2");unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:"Newsreader";font-style:normal;font-weight:500;font-display:swap;src:url(fonts/newsreader-latin-500-normal.woff2) format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:"Newsreader";font-style:italic;font-weight:400;font-display:swap;src:url(fonts/newsreader-latin-ext-400-italic.woff2) format("woff2");unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:"Newsreader";font-style:italic;font-weight:400;font-display:swap;src:url(fonts/newsreader-latin-400-italic.woff2) format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+/* Layout idea: two views. A library that is only covers, and a page that is only text. One floating control. */
+:root{
+  --bg:#f0f0f0; --card:#ffffff; --ink:#0c0c0c; --dim:#8c8c8c; --faint:#e2e2e2; --accent:#e5372c;
+  --shadow:0 1px 2px rgba(0,0,0,.06),0 8px 24px -6px rgba(0,0,0,.16);
+  --serif:"Newsreader",Georgia,"Times New Roman",serif;
+  --ui:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",system-ui,sans-serif;
+  --spring:cubic-bezier(.2,1.25,.35,1); --ease:cubic-bezier(.2,.8,.2,1);
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){ --bg:#0a0a0a; --card:#161616; --ink:#f1f1f1; --dim:#7c7c7c; --faint:#2b2b2b; --accent:#ff4d3f; --shadow:0 1px 2px rgba(0,0,0,.5),0 10px 28px -6px rgba(0,0,0,.7); color-scheme:dark; }
+}
+:root[data-theme="dark"]{ --bg:#0a0a0a; --card:#161616; --ink:#f1f1f1; --dim:#7c7c7c; --faint:#2b2b2b; --accent:#ff4d3f; --shadow:0 1px 2px rgba(0,0,0,.5),0 10px 28px -6px rgba(0,0,0,.7); color-scheme:dark; }
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){ --mark:rgba(255,200,60,.26); } }
+:root{ --mark:rgba(255,196,0,.34); }
+:root[data-theme="dark"]{ --mark:rgba(255,200,60,.26); }
+/* The reader's own choice wins over the system: set by the theme control, per device. */
+:root[data-mode="light"]{ --bg:#f0f0f0; --card:#ffffff; --ink:#0c0c0c; --dim:#8c8c8c; --faint:#e2e2e2; --accent:#e5372c; --mark:rgba(255,196,0,.34); --shadow:0 1px 2px rgba(0,0,0,.06),0 8px 24px -6px rgba(0,0,0,.16); color-scheme:light; }
+:root[data-mode="dark"]{ --bg:#0a0a0a; --card:#161616; --ink:#f1f1f1; --dim:#7c7c7c; --faint:#2b2b2b; --accent:#ff4d3f; --mark:rgba(255,200,60,.26); --shadow:0 1px 2px rgba(0,0,0,.5),0 10px 28px -6px rgba(0,0,0,.7); color-scheme:dark; }
+
+*{box-sizing:border-box;margin:0;padding:0}
+[hidden]{display:none!important}
+html{-webkit-text-size-adjust:100%;overscroll-behavior-y:none}
+body{background:var(--bg);color:var(--ink);font-family:var(--ui);-webkit-font-smoothing:antialiased;transition:background .4s}
+body.reading{background:var(--card)}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:6px}
+
+/* ---------- library ---------- */
+#home{max-width:920px;margin:0 auto;padding:calc(clamp(64px,9vw,88px) + env(safe-area-inset-top)) clamp(20px,5vw,40px) 120px;display:flex;flex-direction:column;gap:clamp(40px,6vw,64px)}
+.hero{display:grid;grid-template-columns:clamp(96px,22vw,168px) 1fr;gap:clamp(18px,4vw,36px);align-items:center;width:100%;text-align:left;background:var(--card);border-radius:32px;padding:clamp(18px,3.5vw,32px);transition:transform .5s var(--spring)}
+.hero:hover{transform:scale(1.008)}
+.hero:active{transform:scale(.99)}
+.hero .cover{transform:rotate(-2.5deg);transition:transform .6s var(--spring)}
+.hero:hover .cover{transform:rotate(0deg) scale(1.03)}
+.htext{position:relative;display:flex;flex-direction:column;gap:4px;min-width:0;align-self:stretch;justify-content:center}
+.ht{font-family:var(--serif);font-weight:400;font-size:clamp(22px,3.4vw,32px);line-height:1.1;letter-spacing:-.015em;text-wrap:balance}
+.ha{color:var(--dim);font-size:14px}
+.hx{font-family:var(--serif);font-size:clamp(15px,1.9vw,17px);line-height:1.5;color:var(--dim);margin-top:12px;max-height:6em;overflow:hidden;-webkit-mask-image:linear-gradient(#000 15%,transparent 74%);mask-image:linear-gradient(#000 15%,transparent 74%)}
+.pill{display:inline-flex;align-items:center;gap:9px;align-self:flex-start;height:40px;padding:0 16px 0 11px;border-radius:999px;background:var(--bg);font-family:var(--serif);font-size:18px;margin-top:-18px;position:relative}
+.ring{width:20px;height:20px;transform:rotate(-90deg)}
+.ring circle{fill:none;stroke-width:4}
+.ring .t{stroke:var(--faint)}
+.ring .v{stroke:var(--accent);stroke-linecap:round}
+
+#grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(clamp(96px,20vw,136px),1fr));gap:clamp(28px,5vw,44px) clamp(20px,4vw,36px);align-items:end}
+.book{position:relative;display:flex;flex-direction:column;gap:10px;cursor:pointer;animation:rise .6s var(--ease) backwards}
+@keyframes rise{from{opacity:0;transform:translateY(14px)}}
+.cover{display:block;width:100%;aspect-ratio:2/3;border-radius:5px;overflow:hidden;background:var(--faint);box-shadow:var(--shadow);transition:transform .55s var(--spring),box-shadow .4s;transform-origin:50% 100%}
+.cover img{width:100%;height:100%;object-fit:cover;display:block}
+.book:hover .cover{transform:translateY(-8px) rotate(-1.6deg)}
+.book:active .cover{transform:scale(.97)}
+.gen{width:100%;height:100%;display:flex;flex-direction:column;justify-content:space-between;padding:12% 10%;color:#fff;font-family:var(--serif);line-height:1.08}
+.gen b{font-weight:400;font-size:clamp(14px,2.4vw,19px);letter-spacing:-.01em;overflow-wrap:anywhere}
+.gen span{font-family:var(--ui);font-size:10px;opacity:.75}
+.prog{height:2px;border-radius:2px;background:var(--faint);overflow:hidden}
+.prog:empty{background:none}
+.prog i{display:block;height:100%;background:var(--ink);border-radius:2px}
+.rm{position:absolute;top:-9px;right:-9px;width:24px;height:24px;border-radius:50%;background:var(--ink);color:var(--bg);font-size:15px;line-height:24px;text-align:center;opacity:0;transform:scale(.6);transition:.25s var(--spring)}
+.book:hover .rm,.rm:focus-visible{opacity:1;transform:none}
+@media(hover:none){.rm{display:none}}
+.add .cover{background:var(--card);box-shadow:none;display:grid;place-items:center}
+.add .cover::before{content:"";width:22px;height:22px;background:linear-gradient(var(--dim),var(--dim)) 50%/100% 1.5px no-repeat,linear-gradient(var(--dim),var(--dim)) 50%/1.5px 100% no-repeat;transition:transform .5s var(--spring)}
+.add:hover .cover::before{transform:rotate(90deg) scale(1.15)}
+.add .prog{background:none}
+.first{font-family:var(--serif);font-size:clamp(28px,5vw,44px);letter-spacing:-.02em;line-height:1.05;color:var(--dim)}
+.first b{font-weight:400;color:var(--ink)}
+
+/* ---------- page ---------- */
+#bar{position:fixed;inset:env(safe-area-inset-top) 0 auto 0;height:2px;z-index:30;pointer-events:none}
+#bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .6s var(--ease)}
+#back{position:fixed;top:calc(14px + env(safe-area-inset-top));left:14px;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;z-index:25;color:var(--dim);transition:opacity .4s,color .2s}
+#back:hover{color:var(--ink)}
+#theme{position:fixed;top:calc(14px + env(safe-area-inset-top));right:14px;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;z-index:25;color:var(--dim);transition:opacity .4s,color .2s}
+#theme:hover{color:var(--ink)}
+#theme svg{width:18px;height:18px}
+#theme path{transition:opacity .35s}
+#theme[data-t="light"] path{opacity:0}
+#theme[data-t="auto"] .l{opacity:0}
+body.playing:not(.peek) #theme{opacity:0;pointer-events:none}
+html.theming::view-transition-old(root){animation:none}
+html.theming::view-transition-new(root){animation:reveal .7s var(--ease)}
+@keyframes reveal{from{clip-path:circle(0 at var(--rx) var(--ry))}to{clip-path:circle(150vmax at var(--rx) var(--ry))}}
+#reader{touch-action:pan-y}
+#page{position:relative;max-width:34em;margin:0 auto;padding:calc(clamp(72px,12vh,128px) + env(safe-area-inset-top)) 24px 240px;font-family:var(--serif);font-size:var(--fs,21px);line-height:1.6}
+#page p{margin:0 0 .85em;text-wrap:pretty}
+#page p.li{padding-left:1.1em}
+#page .quote{font-style:italic;padding-left:1.1em}
+#page h2{font-size:1.7em;line-height:1.12;font-weight:400;letter-spacing:-.018em;margin:1.2em 0 .9em;text-wrap:balance}
+#page h3{font-size:1.2em;font-weight:500;margin:1.4em 0 .5em;text-wrap:balance}
+#page h2:first-child{margin-top:0}
+#page pre{font:.7em/1.5 ui-monospace,Menlo,monospace;white-space:pre-wrap;margin:0 0 1em;overflow-x:auto}
+#page hr{border:0;height:2.2em}
+#page img{display:block;max-width:100%;max-height:72vh;margin:1.6em auto;border-radius:4px}
+.s{cursor:pointer;transition:color .45s,background-color .6s}
+body.playing #page .s,body.held #page .s{color:var(--dim)}
+body.playing #page .s.on,body.held #page .s.on{color:var(--ink)}
+#page .hl .s{background-color:var(--mark)}
+#here{position:absolute;left:8px;width:6px;height:6px;border-radius:50%;background:var(--accent);opacity:0;pointer-events:none;transition:top .45s var(--ease),opacity .3s}
+@media(hover:none){#page{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}}
+@media(hover:hover){body:not(.playing):not(.held) .s:hover{color:var(--accent)}}
+#next{display:grid;place-items:center;width:48px;height:48px;margin:2.4em auto 0;border-radius:50%;background:var(--bg);color:var(--dim)}
+#next:hover{color:var(--ink)}
+
+/* ---------- control ---------- */
+#dock{position:fixed;left:50%;bottom:max(18px,env(safe-area-inset-bottom));transform:translateX(-50%);z-index:26;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:6px;border-radius:999px;background:var(--bg);box-shadow:var(--shadow)}
+/* Both sides share one width, so the play button never moves when they open or close. */
+.side{display:flex;align-items:center;overflow:hidden;max-width:220px;transition:max-width .5s var(--ease),opacity .3s}
+.side.l{justify-self:end}
+.side.r{justify-self:start}
+.x{flex:none;height:44px;display:grid;place-items:center;white-space:nowrap;padding:0 14px;font-size:15px;color:var(--ink)}
+.x:hover{color:var(--accent)}
+#rateBtn{font-variant-numeric:tabular-nums;color:var(--dim)}
+body.playing:not(.peek) .side{max-width:0;opacity:0}
+body.playing:not(.peek) #back{opacity:0;pointer-events:none}
+#dot{position:relative;width:44px;height:44px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;flex:none;margin:0 2px;transition:transform .3s var(--spring)}
+#dot:active{transform:scale(.9)}
+#dot::after{content:"";position:absolute;inset:0;border-radius:50%;border:1.5px solid var(--accent);opacity:calc(var(--amp,0)*.9);transform:scale(calc(1.12 + var(--amp,0)*.55));pointer-events:none}
+#dot svg{width:16px;height:16px;grid-area:1/1;transition:opacity .2s,transform .3s var(--spring)}
+#dot .pa{opacity:0;transform:scale(.5)}
+body.playing #dot .pl{opacity:0;transform:scale(.5)}
+body.playing #dot .pa{opacity:1;transform:none}
+#dot.busy::before{content:"";position:absolute;inset:-5px;border-radius:50%;border:1.5px solid transparent;border-top-color:var(--accent);animation:spin .8s linear infinite}
+body.sys.playing #dot::after{animation:breathe 1.6s ease-in-out infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes breathe{50%{opacity:.7;transform:scale(1.5)}}
+#status{position:fixed;left:50%;bottom:calc(max(18px,env(safe-area-inset-bottom)) + 70px);transform:translateX(-50%);z-index:26;font-size:13px;color:var(--dim);font-variant-numeric:tabular-nums;white-space:nowrap;pointer-events:none;transition:opacity .4s}
+#status:empty{opacity:0}
+
+/* ---------- sheet ---------- */
+#scrim{position:fixed;inset:0;background:rgba(0,0,0,.28);opacity:0;pointer-events:none;transition:opacity .35s;z-index:40}
+#sheet{position:fixed;left:50%;bottom:8px;width:min(480px,calc(100vw - 16px));max-height:min(72vh,640px);transform:translate(-50%,calc(100% + 24px));z-index:41;background:var(--card);border-radius:28px;box-shadow:0 24px 80px -12px rgba(0,0,0,.4);overflow:auto;padding:14px 8px;overscroll-behavior:contain;visibility:hidden;transition:transform .55s var(--ease),visibility 0s .55s}
+body.sheet #scrim{opacity:1;pointer-events:auto}
+body.sheet #sheet{transform:translate(-50%,0);visibility:visible;transition:transform .55s var(--ease)}
+.row{display:flex;align-items:baseline;gap:12px;width:100%;text-align:left;padding:11px 16px;border-radius:14px;font-family:var(--serif);font-size:19px;line-height:1.25}
+.row:hover{background:var(--bg)}
+.row i{flex:none;width:7px;height:7px;border-radius:50%;background:transparent;transform:translateY(-2px)}
+.row.on i{background:var(--accent)}
+.row span{flex:1;min-width:0}
+.row small{font-family:var(--ui);font-size:12px;color:var(--dim)}
+.row.d1{padding-left:34px;font-size:17px;color:var(--dim)}
+.row.d1:hover,.row.d1.on{color:var(--ink)}
+.seg{display:flex;gap:20px;padding:6px 16px 12px;font-size:13px;color:var(--dim)}
+.seg .on{color:var(--ink)}
+.row.note span{font-size:16px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+
+body.dragging::after{content:"";position:fixed;inset:0;z-index:60;background:linear-gradient(var(--ink),var(--ink)) 50%/56px 1.5px no-repeat,linear-gradient(var(--ink),var(--ink)) 50%/1.5px 56px no-repeat,color-mix(in srgb,var(--bg) 90%,transparent)}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition-duration:.01s!important}}
+</style>
+</head>
+<body>
+<div id="bar"><i></i></div>
+
+<button id="theme" aria-label="Theme" data-t="auto"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><path class="r" d="M12 4a8 8 0 0 1 0 16z" fill="currentColor" stroke="none"/><path class="l" d="M12 4a8 8 0 0 0 0 16z" fill="currentColor" stroke="none"/></svg></button>
+<main id="home"><div id="hero"></div><div id="grid"></div></main>
+
+<main id="reader" hidden>
+  <button id="back" aria-label="Library"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+  <article id="page"></article>
+</main>
+
+<div id="status" role="status"></div>
+<div id="dock" hidden>
+  <div class="side l">
+    <button class="x" id="tocBtn" aria-label="Contents"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 8h14M5 16h9"/></svg></button>
+    <button class="x" id="rateBtn" aria-label="Speed"></button>
+  </div>
+  <button id="dot" aria-label="Play">
+    <svg class="pl" viewBox="0 0 16 16" fill="currentColor"><path d="M4.5 2.4v11.2L14 8z"/></svg>
+    <svg class="pa" viewBox="0 0 16 16" fill="currentColor"><path d="M3.5 2.5h3v11h-3zM9.5 2.5h3v11h-3z"/></svg>
+  </button>
+  <div class="side r"><button class="x" id="voiceBtn" aria-label="Voice"></button></div>
+</div>
+
+<div id="scrim"></div>
+<section id="sheet" aria-hidden="true"></section>
+<input type="file" id="file" accept=".epub,application/epub+zip" multiple hidden>
+
+<script>
+const $ = s => document.querySelector(s);
+const el = (tag, cls, html) => { const e = document.createElement(tag); if(cls) e.className = cls; if(html != null) e.innerHTML = html; return e; };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const OPS = 'http://www.idpf.org/2007/ops', XLINK = 'http://www.w3.org/1999/xlink';
+
+/* ---------- voices ---------- */
+// Two engines. Kokoro sounds the most human. Supertonic is lighter and speaks more languages.
+const K_VOICES = {
+  en: [['af_heart', 'Heart', 'US'], ['af_bella', 'Bella', 'US'], ['af_nicole', 'Nicole', 'US'], ['af_aoede', 'Aoede', 'US'], ['af_kore', 'Kore', 'US'], ['af_sarah', 'Sarah', 'US'], ['am_fenrir', 'Fenrir', 'US'], ['am_michael', 'Michael', 'US'], ['am_puck', 'Puck', 'US'],
+       ['bf_emma', 'Emma', 'UK'], ['bf_isabella', 'Isabella', 'UK'], ['bm_george', 'George', 'UK'], ['bm_fable', 'Fable', 'UK']],
+  es: [['ef_dora', 'Dora', ''], ['em_alex', 'Alex', '']], fr: [['ff_siwis', 'Siwis', '']], it: [['if_sara', 'Sara', ''], ['im_nicola', 'Nicola', '']], pt: [['pf_dora', 'Dora', ''], ['pm_alex', 'Alex', '']]
+};
+K_VOICES.ca = K_VOICES.es; // Catalan text, Spanish voices, Catalan pronunciation rules
+const S_VOICES = ['Alba', 'Nora', 'Iris', 'Vera', 'Lena', 'Leo', 'Marc', 'Otto', 'Teo', 'Hugo'];
+const S_LANGS = new Set('en ko ja ar bg cs da de el es et fi fr hi hr hu id it lt lv nl pl pt ro ru sk sl sv tr uk vi'.split(' '));
+const ENGINES = {
+  k: { label:'Natural', worker:'tts/kokoro/worker.js', manifest:{"rt":[{"file":"ort-wasm-simd-threaded.wasm","size":14848852}],"model":[{"file":"model/q8-0.bin","size":20000000},{"file":"model/q8-1.bin","size":20000000},{"file":"model/q8-2.bin","size":20000000},{"file":"model/q8-3.bin","size":20000000},{"file":"model/q8-4.bin","size":12361271}],"voices":["af_heart","af_bella","af_nicole","af_aoede","af_kore","af_sarah","am_fenrir","am_michael","am_puck","bf_emma","bf_isabella","bm_george","bm_fable","ef_dora","em_alex","ff_siwis","if_sara","im_nicola","pf_dora","pm_alex"]} },
+  s: { label:'Fast', worker:'tts/supertonic/worker.js', manifest:{"idx":[{"file":"w/idx-0.bin","size":262144}],"voice":[{"file":"w/voice-0.bin","size":517168}],"dp":[{"file":"w/dp-0.bin","size":3700147}],"te":[{"file":"w/te-0.bin","size":20000000},{"file":"w/te-1.bin","size":16416150}],"ve":[{"file":"w/ve-0.bin","size":20000000},{"file":"w/ve-1.bin","size":20000000},{"file":"w/ve-2.bin","size":20000000},{"file":"w/ve-3.bin","size":18400833}],"voc":[{"file":"w/voc-0.bin","size":20000000},{"file":"w/voc-1.bin","size":5991073}],"rt":[{"file":"ort-wasm-simd-threaded.wasm","size":14848852}]} }
+};
+const RATES = [0.8, 0.9, 1, 1.1, 1.2, 1.35, 1.5];
+
+const store = { get(k){ try{ return JSON.parse(localStorage.getItem(k)); }catch(e){ return null; } }, set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} } };
+// Saved settings may come from an older version with another shape: take only what is valid.
+const saved = store.get('lector:prefs') || {};
+const FS_MIN = 14, FS_MAX = 40, clampFs = v => Math.max(FS_MIN, Math.min(FS_MAX, v));
+const prefs = { rate: RATES.includes(saved.rate) ? saved.rate : 1, voice: saved.voice && typeof saved.voice === 'object' && !Array.isArray(saved.voice) ? saved.voice : {},
+  fs: Number.isFinite(saved.fs) ? clampFs(saved.fs) : (innerWidth < 520 ? 19 : 21), theme: ['auto', 'light', 'dark'].includes(saved.theme) ? saved.theme : 'auto' };
+const savePrefs = () => store.set('lector:prefs', prefs);
+
+const root = document.documentElement, reduced = matchMedia('(prefers-reduced-motion:reduce)').matches;
+function chrome(){ requestAnimationFrame(() => { $('#themeColor').content = getComputedStyle(document.body).backgroundColor; }); }
+function applyTheme(){ if(prefs.theme === 'auto') root.removeAttribute('data-mode'); else root.dataset.mode = prefs.theme; $('#theme').dataset.t = prefs.theme; chrome(); }
+matchMedia('(prefers-color-scheme:dark)').addEventListener('change', chrome);
+// Follows the system until tapped. Then: the opposite of the system, the same as the system, and back to following it.
+$('#theme').onclick = e => {
+  const sysDark = root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme:dark)').matches;
+  const order = ['auto', sysDark ? 'light' : 'dark', sysDark ? 'dark' : 'light'], next = order[(order.indexOf(prefs.theme) + 1) % 3];
+  const b = e.currentTarget.getBoundingClientRect(); root.style.setProperty('--rx', (b.left + b.width / 2) + 'px'); root.style.setProperty('--ry', (b.top + b.height / 2) + 'px');
+  const go = () => { prefs.theme = next; savePrefs(); applyTheme(); };
+  if(document.startViewTransition && !reduced){ root.classList.add('theming'); document.startViewTransition(go).finished.finally(() => root.classList.remove('theming')); } else go();
+};
+const applyFs = () => root.style.setProperty('--fs', prefs.fs.toFixed(2) + 'px');
+applyTheme(); applyFs();
+
+const S = { book:null, zip:null, spine:[], toc:[], lang:'en', ch:0, sents:[], idx:0, playing:false, paused:false, token:0, mode:'neural', blobs:[] };
+let LIB = []; const FILES = new Map(), COVERS = new Map();
+
+/* ---------- storage ---------- */
+const DB = {
+  db:null,
+  open(){ return this.db || (this.db = new Promise((res, rej) => { try{ const r = indexedDB.open('lector', 1);
+    r.onupgradeneeded = () => { r.result.createObjectStore('books', { keyPath:'id' }); r.result.createObjectStore('files'); };
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }catch(e){ rej(e); } })); },
+  async tx(name, mode, fn){ const db = await this.open(); return new Promise((res, rej) => { const t = db.transaction(name, mode); const q = fn(t.objectStore(name)); t.oncomplete = () => res(q && q.result); t.onerror = t.onabort = () => rej(t.error); }); },
+  all(){ return this.tx('books', 'readonly', s => s.getAll()).catch(() => []); },
+  put(b){ return this.tx('books', 'readwrite', s => s.put(b)).catch(e => console.warn('save failed', e)); },
+  file(id){ return this.tx('files', 'readonly', s => s.get(id)).catch(() => null); },
+  putFile(id, buf){ return this.tx('files', 'readwrite', s => s.put(buf, id)).catch(() => {}); },
+  del(id){ this.tx('books', 'readwrite', s => s.delete(id)).catch(() => {}); this.tx('files', 'readwrite', s => { s.delete(id); s.delete('cover:' + id); }).catch(() => {}); try{ localStorage.removeItem('lector:pos:' + id); localStorage.removeItem('lector:hl:' + id); }catch(e){} }
+};
+
+/* ---------- epub ---------- */
+const byTag = (doc, n) => { let r = Array.from(doc.getElementsByTagNameNS('*', n)); if(!r.length) r = Array.from(doc.getElementsByTagName(n)); return r; };
+function resolvePath(base, rel){ try{ return decodeURIComponent(new URL(rel, 'http://x/' + base).pathname.slice(1)); }catch(e){ return rel; } }
+function zfile(zip, path){ let f = zip.file(path); if(f) return f; const l = path.toLowerCase(); zip.forEach((p, z) => { if(!f && p.toLowerCase() === l) f = z; }); return f; }
+async function readText(zip, path){ const f = zfile(zip, path); if(!f) throw new Error('Missing ' + path); return f.async('string'); }
+const parseXML = (s, type = 'application/xml') => new DOMParser().parseFromString(s, type);
+
+async function parseEpub(buf){
+  const zip = await JSZip.loadAsync(buf);
+  const container = parseXML(await readText(zip, 'META-INF/container.xml'));
+  const opfPath = byTag(container, 'rootfile')[0].getAttribute('full-path');
+  const opf = parseXML(await readText(zip, opfPath));
+  const manifest = {};
+  byTag(opf, 'item').forEach(it => manifest[it.getAttribute('id')] = { id: it.getAttribute('id'), href: resolvePath(opfPath, it.getAttribute('href')), type: it.getAttribute('media-type') || '', props: it.getAttribute('properties') || '' });
+  const spineEl = byTag(opf, 'spine')[0];
+  const spine = byTag(opf, 'itemref').filter(r => r.getAttribute('linear') !== 'no').map(r => manifest[r.getAttribute('idref')]).filter(m => m && /html|xml/.test(m.type));
+  if(!spine.length) throw new Error('No readable chapters');
+  const txt = n => ((byTag(opf, n)[0] || {}).textContent || '').trim();
+  const items = Object.values(manifest);
+  const metaCover = byTag(opf, 'meta').find(m => m.getAttribute('name') === 'cover');
+  const cover = items.find(m => /cover-image/.test(m.props)) || (metaCover && manifest[metaCover.getAttribute('content')]) || items.find(m => /^image\//.test(m.type) && /cover/i.test(m.id + m.href));
+  const toc = [];
+  const walkNav = (e, base, depth) => { const ol = Array.from(e.children).find(c => c.localName === 'ol'); if(!ol) return;
+    for(const li of ol.children){ if(li.localName !== 'li') continue; const a = Array.from(li.children).find(c => c.localName === 'a' || c.localName === 'span');
+      if(a){ const h = a.getAttribute('href'); const [p, f] = (h || '').split('#'); toc.push({ label:a.textContent.replace(/\s+/g, ' ').trim(), href: h ? resolvePath(base, p || '') : null, frag:f || null, depth }); }
+      walkNav(li, base, depth + 1); } };
+  const walkNcx = (e, base, depth) => { for(const np of e.children){ if(np.localName !== 'navPoint') continue;
+      const label = (byTag(np, 'text')[0] || {}).textContent || ''; const c = Array.from(np.children).find(c => c.localName === 'content'); const src = c && c.getAttribute('src'); const [p, f] = (src || '').split('#');
+      toc.push({ label:label.replace(/\s+/g, ' ').trim(), href: src ? resolvePath(base, p) : null, frag:f || null, depth }); walkNcx(np, base, depth + 1); } };
+  try{
+    const nav = items.find(m => /\bnav\b/.test(m.props));
+    if(nav){ const d = parseXML(await readText(zip, nav.href), 'application/xhtml+xml'); const navs = byTag(d, 'nav'); const n = navs.find(n => /toc/.test(n.getAttribute('epub:type') || n.getAttributeNS(OPS, 'type') || '')) || navs[0]; if(n) walkNav(n, nav.href, 0); }
+    if(!toc.length){ const ncx = manifest[spineEl.getAttribute('toc')] || items.find(m => /ncx/.test(m.type)); if(ncx){ const map = byTag(parseXML(await readText(zip, ncx.href)), 'navMap')[0]; if(map) walkNcx(map, ncx.href, 0); } }
+  }catch(e){}
+  toc.forEach(t => t.ch = t.href ? spine.findIndex(s => s.href === t.href) : -1);
+  return { zip, spine, toc: toc.filter(t => t.ch >= 0 && t.label), title: txt('title'), author: txt('creator'), lang: (txt('language') || 'en').toLowerCase(), cover };
+}
+
+// Covers are kept as plain bytes in their own record. Image objects stored inside a book record do not survive on iOS, and took the reading position down with them.
+async function makeCover(zip, item){
+  if(!item) return null;
+  try{
+    const f = zfile(zip, item.href); if(!f) return null;
+    const raw = await f.async('arraybuffer'), type = item.type || 'image/jpeg';
+    try{
+      const bmp = await createImageBitmap(new Blob([raw], { type }));
+      const h = Math.min(720, bmp.height), w = Math.round(bmp.width * h / bmp.height);
+      const c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d').drawImage(bmp, 0, 0, w, h);
+      const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', .86));
+      if(blob) return { buf: await blob.arrayBuffer(), type:'image/jpeg' };
+    }catch(e){}
+    return raw.byteLength < 3e6 ? { buf:raw, type } : null;
+  }catch(e){ return null; }
+}
+async function setCover(meta, c){ if(c){ await DB.putFile('cover:' + meta.id, c.buf); meta.cover = c.type; } else { meta.cover = null; meta.nocover = true; } COVERS.delete(meta.id); }
+// Runs at start: moves old-style covers to the new record, and rebuilds any that were lost from the book file itself.
+async function repairCovers(){
+  let changed = false;
+  for(const b of LIB){
+    if(b.cover && typeof b.cover !== 'string'){ try{ await setCover(b, { buf: await b.cover.arrayBuffer(), type: b.cover.type || 'image/jpeg' }); b.nocover = false; }catch(e){ b.cover = null; b.nocover = false; } await DB.put(b); changed = true; }
+    if(!b.cover && !b.nocover){ try{ const buf = FILES.get(b.id) || await DB.file(b.id); if(buf){ const p = await parseEpub(buf); await setCover(b, await makeCover(p.zip, p.cover)); await DB.put(b); changed = true; } }catch(e){ b.nocover = true; } }
+  }
+  if(changed && !S.book) renderHome();
+}
+const hash = s => { let h = 2166136261; for(let i = 0; i < s.length; i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); };
+
+async function addFiles(files){
+  const list = Array.from(files).filter(f => /\.epub$/i.test(f.name) || /epub/.test(f.type));
+  if(!list.length) return say('That is not an EPUB.');
+  let last = null;
+  for(const f of list){
+    try{
+      const buf = await f.arrayBuffer(); const p = await parseEpub(buf);
+      const title = p.title || f.name.replace(/\.epub$/i, '');
+      const id = hash(title + '|' + p.author + '|' + buf.byteLength);
+      let meta = LIB.find(b => b.id === id);
+      if(!meta){ meta = { id, title, author:p.author, lang:p.lang, cover:null, pos:{ ch:0, idx:0 }, progress:0, excerpt:'', hl:[], last:Date.now() }; await setCover(meta, await makeCover(p.zip, p.cover)); LIB.push(meta); DB.put(meta); DB.putFile(id, buf); try{ navigator.storage.persist(); }catch(e){} }
+      FILES.set(id, buf); last = meta;
+    }catch(e){ console.error(e); say('Could not open ' + f.name + '.'); }
+  }
+  if(list.length === 1 && last) openBook(last.id); else renderHome();
+}
+
+/* ---------- library view ---------- */
+const TINTS = ['#1f2a44', '#7a2e22', '#2f4a3c', '#3a3a3a', '#5a3d6b', '#8a6a1f', '#1d4f5c'];
+function coverNode(b){
+  const c = el('span', 'cover');
+  const g = el('span', 'gen', `<b>${esc(b.title)}</b><span>${esc(b.author || '')}</span>`); g.style.background = TINTS[parseInt(b.id, 36) % TINTS.length]; c.appendChild(g);
+  if(typeof b.cover === 'string'){
+    const put = url => { const img = new Image(); img.alt = b.title; img.onload = () => { c.innerHTML = ''; c.appendChild(img); }; img.src = url; };
+    if(COVERS.has(b.id)) put(COVERS.get(b.id));
+    else DB.file('cover:' + b.id).then(buf => { if(!buf) return; const url = URL.createObjectURL(new Blob([buf], { type:b.cover })); COVERS.set(b.id, url); put(url); });
+  }
+  return c;
+}
+function renderHome(){
+  const books = [...LIB].sort((a, b) => b.last - a.last);
+  const cur = books[0] && (books[0].progress > 0) ? books[0] : null;
+  const hero = $('#hero'), grid = $('#grid'); hero.innerHTML = ''; grid.innerHTML = '';
+  hero.hidden = !cur && books.length > 0;
+  if(cur){
+    const h = el('button', 'hero'); h.setAttribute('aria-label', 'Continue ' + cur.title);
+    h.appendChild(coverNode(cur));
+    const C = 2 * Math.PI * 8, p = Math.max(.02, Math.min(1, cur.progress));
+    h.appendChild(el('span', 'htext', `<span class="ht">${esc(cur.title)}</span><span class="ha">${esc(cur.author || '')}</span><span class="hx">${esc(cur.excerpt || '')}</span>
+      <span class="pill"><svg class="ring" viewBox="0 0 20 20"><circle class="t" cx="10" cy="10" r="8"/><circle class="v" cx="10" cy="10" r="8" stroke-dasharray="${(C * p).toFixed(2)} ${C.toFixed(2)}"/></svg>Continue</span>`));
+    h.onclick = () => openBook(cur.id);
+    hero.appendChild(h);
+  } else if(!books.length){
+    hero.appendChild(el('p', 'first', '<b>Add a book.</b> It reads to you.'));
+  }
+  books.filter(b => b !== cur).forEach((b, i) => {
+    const t = el('div', 'book'); t.tabIndex = 0; t.setAttribute('role', 'button'); t.setAttribute('aria-label', b.title); t.style.animationDelay = Math.min(i, 12) * 45 + 'ms';
+    t.appendChild(coverNode(b));
+    t.appendChild(el('span', 'prog', b.progress > 0 ? `<i style="width:${Math.round(b.progress * 100)}%"></i>` : ''));
+    const rm = el('button', 'rm', '×'); rm.setAttribute('aria-label', 'Remove ' + b.title);
+    rm.onclick = e => { e.stopPropagation(); LIB = LIB.filter(x => x !== b); FILES.delete(b.id); DB.del(b.id); renderHome(); };
+    t.appendChild(rm);
+    t.onclick = () => openBook(b.id);
+    t.onkeydown = e => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); openBook(b.id); } };
+    grid.appendChild(t);
+  });
+  const add = el('button', 'book add'); add.setAttribute('aria-label', 'Add a book'); add.appendChild(el('span', 'cover')); add.appendChild(el('span', 'prog'));
+  add.onclick = () => $('#file').click(); grid.appendChild(add);
+}
+function show(view){
+  const go = () => { $('#home').hidden = view !== 'home'; $('#reader').hidden = $('#dock').hidden = view !== 'reader'; document.body.classList.toggle('reading', view === 'reader'); chrome(); if(view === 'home'){ $('#bar i').style.width = '0'; scrollTo(0, 0); } };
+  if(document.startViewTransition && !matchMedia('(prefers-reduced-motion:reduce)').matches) return document.startViewTransition(go).updateCallbackDone.catch(() => {});
+  go(); return Promise.resolve();
+}
+$('#file').onchange = e => { addFiles(e.target.files); e.target.value = ''; };
+let dragDepth = 0;
+addEventListener('dragenter', e => { e.preventDefault(); dragDepth++; document.body.classList.add('dragging'); });
+addEventListener('dragleave', () => { if(--dragDepth <= 0){ dragDepth = 0; document.body.classList.remove('dragging'); } });
+addEventListener('dragover', e => e.preventDefault());
+addEventListener('drop', e => { e.preventDefault(); dragDepth = 0; document.body.classList.remove('dragging'); if(e.dataTransfer.files.length) addFiles(e.dataTransfer.files); });
+
+/* ---------- reader ---------- */
+async function openBook(id){
+  const meta = LIB.find(b => b.id === id); if(!meta) return;
+  halt();
+  try{
+    const buf = FILES.get(id) || await DB.file(id); if(!buf) throw new Error('file gone');
+    FILES.set(id, buf);
+    const p = await parseEpub(buf);
+    S.blobs.forEach(u => URL.revokeObjectURL(u)); S.blobs = [];
+    Object.assign(S, { book:meta, zip:p.zip, spine:p.spine, toc:p.toc, lang:p.lang });
+    meta.last = Date.now(); DB.put(meta); store.set('lector:open', id);
+    document.title = meta.title;
+    await show('reader');
+    const lp = store.get('lector:pos:' + id); if(lp && (lp.t || 0) >= (meta.posT || 0)){ meta.pos = { ch:lp.ch, idx:lp.idx }; meta.progress = lp.progress || meta.progress; }
+    const lh = store.get('lector:hl:' + id); if(Array.isArray(lh) && (!meta.hl || lh.length !== meta.hl.length)) meta.hl = lh; if(!Array.isArray(meta.hl)) meta.hl = [];
+    const pos = meta.pos && meta.pos.ch < S.spine.length ? meta.pos : { ch:0, idx:0 };
+    await loadChapter(pos.ch, { sentence:pos.idx });
+  }catch(e){ console.error(e); say('That book would not open.'); show('home'); renderHome(); return; }
+  // The voice is set up after the book is on screen, so a voice problem can never block reading.
+  try{ setEngine(); TTS.start(); }catch(e){ console.error(e); }
+  nowPlaying(meta);
+}
+// What the lock screen, Control Center, AirPods and the Mac menu bar show and control.
+async function nowPlaying(meta){
+  try{
+    let art = [{ src: new URL('icons/icon-512.png', location.href).href, sizes:'512x512', type:'image/png' }];
+    if(typeof meta.cover === 'string'){ const buf = await DB.file('cover:' + meta.id); if(buf){ if(!COVERS.has(meta.id)) COVERS.set(meta.id, URL.createObjectURL(new Blob([buf], { type:meta.cover }))); art = [{ src:COVERS.get(meta.id), sizes:'480x720', type:meta.cover }]; } }
+    navigator.mediaSession.metadata = new MediaMetadata({ title:meta.title, artist:meta.author || '', album:'Lector', artwork:art });
+  }catch(e){}
+}
+function closeBook(){ halt(); flushPos(); document.body.classList.remove('held'); store.set('lector:open', null); S.book = null; document.title = 'Lector'; closeSheet(); renderHome(); show('home'); }
+$('#back').onclick = closeBook;
+
+const BLOCKS = new Set('address article aside blockquote body dd details div dl dt figcaption figure footer form h1 h2 h3 h4 h5 h6 header hgroup li main nav ol p pre section table tbody thead tfoot tr td th caption ul'.split(' '));
+const SKIP = new Set(['script', 'style', 'head', 'title', 'noscript', 'rt', 'rp', 'template']);
+const LEAF = ['p', 'li', 'dt', 'dd', 'figcaption', 'pre'];
+const MIME = { jpg:'image/jpeg', jpeg:'image/jpeg', png:'image/png', gif:'image/gif', svg:'image/svg+xml', webp:'image/webp' };
+let segmenter = null;
+function splitSentences(text){
+  let parts;
+  try{ if(!segmenter || segmenter._l !== S.lang){ segmenter = new Intl.Segmenter(S.lang, { granularity:'sentence' }); segmenter._l = S.lang; } parts = Array.from(segmenter.segment(text), x => x.segment.trim()).filter(Boolean); }
+  catch(e){ parts = text.match(/[^.!?…]+[.!?…]+["'”’)\]]*|\S[^.!?…]*$/g) || [text]; }
+  const out = [];
+  for(const p of parts){
+    if(p.length <= 280){ out.push(p); continue; }
+    let cur = ''; for(const bit of p.split(/(?<=[;:,—])\s+/)){ if(cur && (cur + ' ' + bit).length > 260){ out.push(cur); cur = bit; } else cur = cur ? cur + ' ' + bit : bit; }
+    if(cur) out.push(cur);
+  }
+  return out;
+}
+function textOf(node){
+  let t = '';
+  for(const c of node.childNodes){
+    if(c.nodeType === 3){ t += c.nodeValue; continue; } if(c.nodeType !== 1) continue;
+    const n = c.localName.toLowerCase(); if(SKIP.has(n)) continue; if(n === 'br'){ t += ' '; continue; }
+    if(/noteref/.test(c.getAttribute('epub:type') || c.getAttributeNS(OPS, 'type') || '')) continue;
+    if(n === 'sup' && /^[\s\d*†‡,\[\]]*$/.test(c.textContent)) continue;
+    t += textOf(c);
+  }
+  return t;
+}
+function hasBlock(e){ for(const d of e.getElementsByTagName('*')){ const n = d.localName.toLowerCase(); if(BLOCKS.has(n) || n === 'img' || n === 'image' || n === 'hr') return true; } return false; }
+
+async function loadChapter(i, { sentence = 0, anchor = null } = {}){
+  S.ch = i; S.idx = 0; S.sents = [];
+  const item = S.spine[i]; let raw = '';
+  try{ raw = await readText(S.zip, item.href); }catch(e){}
+  let doc = parseXML(raw, 'application/xhtml+xml'); if(doc.getElementsByTagName('parsererror').length) doc = parseXML(raw, 'text/html');
+  const body = byTag(doc, 'body')[0] || doc.documentElement;
+  const out = document.createDocumentFragment(); const anchors = {}; let ids = [], pn = 0; const marked = new Set((S.book.hl || []).filter(h => h.ch === i).map(h => h.p));
+  const emit = (text, tag, ctx) => {
+    text = text.replace(/\s+/g, ' ').trim(); if(!text) return;
+    const e = document.createElement(/^h[12]$/.test(tag) ? 'h2' : /^h[3-6]$/.test(tag) ? 'h3' : tag === 'pre' ? 'pre' : 'p');
+    if(tag === 'li') e.className = 'li'; if(ctx.quote) e.classList.add('quote');
+    e.dataset.p = pn; if(marked.has(pn)) e.classList.add('hl'); pn++;
+    ids.forEach(id => anchors[id] = S.sents.length); ids = [];
+    for(const s of splitSentences(text)){ const sp = document.createElement('span'); sp.className = 's'; sp.textContent = s + ' '; sp.dataset.i = S.sents.length; S.sents.push({ text:s, el:sp }); e.appendChild(sp); }
+    S.sents[S.sents.length - 1].last = true;
+    out.appendChild(e);
+  };
+  const emitImg = src => { if(!src) return; const f = zfile(S.zip, resolvePath(item.href, src)); if(!f) return; const img = new Image(); img.alt = ''; out.appendChild(img);
+    const ext = (src.split('.').pop() || '').toLowerCase().split(/[?#]/)[0];
+    f.async('arraybuffer').then(b => { const u = URL.createObjectURL(new Blob([b], { type:MIME[ext] || 'image/jpeg' })); S.blobs.push(u); img.src = u; }); };
+  const walk = (node, ctx) => {
+    let buf = ''; const flush = () => { if(buf.trim()) emit(buf, ctx.tag || 'p', ctx); buf = ''; };
+    for(const c of node.childNodes){
+      if(c.nodeType === 3){ buf += c.nodeValue; continue; } if(c.nodeType !== 1) continue;
+      const n = c.localName.toLowerCase(); if(SKIP.has(n)) continue;
+      const id = c.getAttribute('id'); if(id) ids.push(id);
+      if(n === 'img' || n === 'image'){ flush(); emitImg(c.getAttribute('src') || c.getAttributeNS(XLINK, 'href') || c.getAttribute('xlink:href') || c.getAttribute('href')); continue; }
+      if(n === 'svg'){ flush(); for(const im of c.getElementsByTagName('*')) if(im.localName === 'image') emitImg(im.getAttributeNS(XLINK, 'href') || im.getAttribute('xlink:href') || im.getAttribute('href')); continue; }
+      if(n === 'hr'){ flush(); out.appendChild(document.createElement('hr')); continue; }
+      if(BLOCKS.has(n)){ flush(); const sub = { ...ctx }; if(n === 'blockquote') sub.quote = true; const own = (/^h[1-6]$/.test(n) || LEAF.includes(n)) ? n : null; if(own) sub.tag = own;
+        if(hasBlock(c)) walk(c, sub); else emit(textOf(c), own || ctx.tag || 'p', sub); continue; }
+      if(hasBlock(c)){ flush(); walk(c, ctx); continue; }
+      buf += textOf(c);
+    }
+    flush();
+  };
+  walk(body, {});
+  const page = $('#page'); page.innerHTML = ''; page.appendChild(out); const here = el('i'); here.id = 'here'; page.appendChild(here); document.body.classList.remove('held');
+  if(i < S.spine.length - 1){ const n = el('button', '', '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9l7 7 7-7"/></svg>'); n.id = 'next'; n.setAttribute('aria-label', 'Next chapter'); n.onclick = () => goChapter(S.ch + 1); page.appendChild(n); }
+  let start = sentence; if(anchor && anchors[anchor] != null) start = anchors[anchor];
+  S.idx = Math.max(0, Math.min(start, Math.max(0, S.sents.length - 1)));
+  lastOn = null; progress(); prewarm();
+  if(S.sents.length && S.idx > 0) S.sents[S.idx].el.scrollIntoView({ block:'center' }); else scrollTo(0, 0);
+  placeHere();
+}
+async function goChapter(i, anchor){ if(i < 0 || i >= S.spine.length) return; const was = S.playing; halt(); await loadChapter(i, { anchor }); savePos(); if(was) play(); }
+$('#page').addEventListener('click', e => { const s = e.target.closest('.s'); if(!s || noClick || getSelection().toString()) return; if(S.playing && e.pointerType === 'touch') return; jump(+s.dataset.i); });
+
+// A dot in the margin marks where the reading is, playing or not.
+function placeHere(){ const d = $('#here'), s = S.sents[S.idx]; if(!d) return; const r = s && s.el.getClientRects()[0]; if(!r){ d.style.opacity = 0; return; } d.style.top = (r.top - $('#page').getBoundingClientRect().top + r.height / 2 - 3) + 'px'; d.style.opacity = 1; }
+addEventListener('resize', placeHere);
+if(document.fonts && document.fonts.ready) document.fonts.ready.then(placeHere);
+
+// Long press a paragraph to highlight it. Long press again to clear it.
+let press = null, noClick = false; const fingers = new Set();
+function saveMarks(){ const b = S.book; if(!b) return; store.set('lector:hl:' + b.id, b.hl); DB.put(b); }
+function toggleMark(blk){
+  const b = S.book, p = +blk.dataset.p, k = b.hl.findIndex(h => h.ch === S.ch && h.p === p);
+  if(k >= 0) b.hl.splice(k, 1); else b.hl.push({ ch:S.ch, p, text: blk.textContent.replace(/\s+/g, ' ').trim().slice(0, 180), t:Date.now() });
+  blk.classList.toggle('hl', k < 0); saveMarks();
+  try{ navigator.vibrate(8); }catch(e){}
+  if(!reduced) blk.animate([{ transform:'scale(1)' }, { transform:'scale(1.012)' }, { transform:'scale(1)' }], { duration:280, easing:'ease-out' });
+}
+const endPress = () => { if(press){ clearTimeout(press.timer); press = null; } };
+$('#page').addEventListener('pointerdown', e => {
+  fingers.add(e.pointerId); endPress();
+  if(fingers.size > 1 || (e.pointerType === 'mouse' && e.button !== 0) || (S.playing && e.pointerType === 'touch')) return;
+  const blk = e.target.closest('[data-p]'); if(!blk) return;
+  press = { x:e.clientX, y:e.clientY, timer: setTimeout(() => { press = null; noClick = true; getSelection().removeAllRanges(); toggleMark(blk); }, 480) };
+});
+addEventListener('pointermove', e => { if(press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 10) endPress(); }, { passive:true });
+for(const n of ['pointerup', 'pointercancel']) addEventListener(n, e => { fingers.delete(e.pointerId); endPress(); if(noClick) setTimeout(() => noClick = false, 120); });
+addEventListener('scroll', () => { endPress(); if(document.body.classList.contains('held') && Math.abs(scrollY - heldAt) > 80) document.body.classList.remove('held'); }, { passive:true });
+$('#page').addEventListener('contextmenu', e => { if(noClick || matchMedia('(hover:none)').matches) e.preventDefault(); });
+async function goMark(h){
+  halt(); if(h.ch !== S.ch) await loadChapter(h.ch);
+  const blk = $('#page').querySelector('[data-p="' + h.p + '"]'); if(!blk) return;
+  const first = blk.querySelector('.s'); if(first) S.idx = +first.dataset.i;
+  blk.scrollIntoView({ block:'center' }); progress(); placeHere(); savePos(); TTS.trim(); TTS.fill();
+}
+
+// Pinch to resize the text: two fingers on a phone, a trackpad pinch or Ctrl and scroll on a Mac. The passage under the fingers stays put.
+let pinch = null, fsTimer = null;
+function setFs(v, anchor){
+  v = clampFs(v); if(Math.abs(v - prefs.fs) < .05) return;
+  const top = anchor && anchor.el.getBoundingClientRect().top;
+  prefs.fs = v; applyFs();
+  if(anchor) scrollBy(0, anchor.el.getBoundingClientRect().top - top);
+  placeHere(); clearTimeout(fsTimer); fsTimer = setTimeout(savePrefs, 400);
+}
+const anchorAt = y => { const e = document.elementFromPoint(innerWidth / 2, y); const el2 = e && (e.closest('.s') || e.closest('[data-p]')); return el2 ? { el:el2 } : (S.sents[S.idx] ? { el:S.sents[S.idx].el } : null); };
+const spread = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+$('#reader').addEventListener('touchstart', e => { if(e.touches.length === 2){ endPress(); pinch = { d:spread(e.touches), fs:prefs.fs, anchor:anchorAt((e.touches[0].clientY + e.touches[1].clientY) / 2) }; } }, { passive:true });
+$('#reader').addEventListener('touchmove', e => { if(pinch && e.touches.length === 2){ e.preventDefault(); setFs(pinch.fs * spread(e.touches) / pinch.d, pinch.anchor); } }, { passive:false });
+$('#reader').addEventListener('touchend', e => { if(e.touches.length < 2) pinch = null; });
+$('#reader').addEventListener('wheel', e => { if(!e.ctrlKey) return; e.preventDefault(); setFs(prefs.fs * Math.exp(-e.deltaY * .01), anchorAt(e.clientY)); }, { passive:false });
+for(const n of ['gesturestart', 'gesturechange']) $('#reader').addEventListener(n, e => { e.preventDefault(); if(pinch && pinch.d) return; if(n === 'gesturestart' || !pinch) pinch = { fs:prefs.fs, anchor:anchorAt(e.clientY || innerHeight / 2) }; else setFs(pinch.fs * e.scale, pinch.anchor); });
+$('#reader').addEventListener('gestureend', () => { if(pinch && !pinch.d) pinch = null; });
+
+const prewarm = () => TTS.fill();
+let lastOn = null;
+function mark(i){
+  if(lastOn) lastOn.classList.remove('on');
+  const s = S.sents[i]; if(!s) return; s.el.classList.add('on'); lastOn = s.el;
+  const r = s.el.getBoundingClientRect();
+  if(r.top < innerHeight * .16 || r.bottom > innerHeight * .62) scrollTo({ top: scrollY + r.top - innerHeight * .34, behavior:'smooth' });
+  progress(); placeHere();
+}
+function progress(){ if(!S.spine.length) return 0; const p = (S.ch + S.idx / (S.sents.length || 1)) / S.spine.length; $('#bar i').style.width = (p * 100) + '%'; return p; }
+let posTimer = null;
+function savePos(){
+  const b = S.book; if(!b) return;
+  b.pos = { ch:S.ch, idx:S.idx }; b.progress = progress(); b.last = b.posT = Date.now();
+  b.excerpt = S.sents.slice(S.idx, S.idx + 6).map(s => s.text).join(' ').slice(0, 520);
+  store.set('lector:pos:' + b.id, { ch:S.ch, idx:S.idx, progress:b.progress, t:b.posT }); // written at once, so a full close cannot lose it
+  clearTimeout(posTimer); posTimer = setTimeout(flushPos, 1500);
+}
+function flushPos(){ clearTimeout(posTimer); if(S.book) DB.put(S.book); }
+addEventListener('visibilitychange', () => {
+  if(document.hidden) return flushPos();
+  if(!S.playing) return;
+  keepAwake(true);
+  // Back from the lock screen: if the sound was cut while we were away, pick it up, or show the paused state with the place kept.
+  if(S.mode === 'neural' && clipDone && player.paused && !player.ended){ const p = player.play(); if(p) p.catch(() => { S.paused = true; setPlaying(false); hold(); }); }
+  placeHere();
+});
+addEventListener('pagehide', flushPos);
+
+/* ---------- neural voice ---------- */
+const fam = () => (S.lang || 'en').slice(0, 2);
+function voicesFor(f){ return { k: (K_VOICES[f] || []).map(([id, name, tag]) => ({ e:'k', id, name, tag })), s: S_LANGS.has(f) ? S_VOICES.map((name, id) => ({ e:'s', id, name, tag:'' })) : [] }; }
+function voice(){
+  const v = voicesFor(fam()), all = [...v.k, ...v.s]; if(!all.length) return null;
+  return all.find(x => x.e + ':' + x.id === prefs.voice[fam()]) || (fam() === 'en' && /gb|uk|au|nz|ie/.test(S.lang) && all.find(x => x.id === 'bf_emma')) || all[0];
+}
+const vkey = v => v.e + ':' + v.id;
+const kLang = id => ({ a:'en-us', b:'en', e: fam() === 'ca' ? 'ca' : 'es', f:'fr-fr', i:'it', p: /pt-pt/.test(S.lang) ? 'pt' : 'pt-br' })[id[0]];
+const useNeural = () => TTS.state !== 'failed' && !!voice();
+
+const TTS = {
+  w:null, engine:null, state:'idle', stats:null, info:null, fails:0, cache:new Map(), pend:new Map(), ids:new Map(), seq:0,
+  start(){
+    const v = voice(); if(!v || this.state === 'failed') return;
+    if(this.engine && this.engine !== v.e) this.stop();          // the other engine was chosen: swap workers
+    if(this.state !== 'idle') return; this.state = 'loading'; this.engine = v.e;
+    try{ this.w = new Worker(ENGINES[v.e].worker, { type:'module' }); }catch(e){ return this.fail(); }
+    this.w.onerror = () => { if(this.state !== 'ready') this.fail(); };
+    this.w.onmessage = e => { const m = e.data;
+      if(m.type === 'progress') say(m.stage === 'waiting' ? 'Waiting for a connection' : m.stage === 'compile' ? 'Starting the voice' : 'Downloading the voice ' + Math.floor(m.got / m.total * 100) + '%', 0);
+      else if(m.type === 'ready'){ this.state = 'ready'; this.info = m; say(''); this.fill(); }
+      else if(m.type === 'error'){ console.error(m.message); this.fail(); }
+      else if(m.type === 'audio'){ this.stats = { rtf:m.rtf, steps:m.steps, ms:m.ms }; this.settle(m.id, { a:m.audio, sr:m.rate }); }
+      else if(m.type === 'genError'){ console.warn(m.message); this.settle(m.id, null); }
+      else if(m.type === 'cleared') m.ids.forEach(id => this.settle(id, null, true)); };
+    this.w.postMessage({ type:'init', manifest:ENGINES[v.e].manifest });
+  },
+  stop(){ try{ this.w && this.w.terminate(); }catch(e){} this.w = null; for(const [, p] of this.pend) p.resolve(null); this.pend.clear(); this.ids.clear(); this.cache.clear(); this.state = 'idle'; this.engine = null; this.info = this.stats = null; },
+  settle(id, audio, dropped){ const key = this.ids.get(id); if(key == null) return; this.ids.delete(id); const p = this.pend.get(key); this.pend.delete(key);
+    if(audio && !dropped){ this.cache.set(key, audio); if(this.cache.size > 90) this.trim(); }
+    if(p) p.resolve(audio); this.fill(); },
+  get(key, text, voice, lang, priority){
+    if(this.cache.has(key)) return Promise.resolve(this.cache.get(key));
+    const p = this.pend.get(key); if(p) return p.promise;
+    const id = ++this.seq; let resolve; const promise = new Promise(r => resolve = r);
+    this.pend.set(key, { promise, resolve }); this.ids.set(id, key);
+    this.w.postMessage({ type:'gen', id, text, voice, speed:prefs.rate, lang, priority });
+    return promise;
+  },
+  key(i){ return [S.book.id, S.ch, i, vkey(voice()), prefs.rate].join('|'); },
+  sentence(i, priority){ const s = S.sents[i]; if(!s || !/[\p{L}\p{N}]/u.test(s.text)) return Promise.resolve(null); this.start(); if(!this.w) return Promise.resolve(null); const v = voice(); return this.get(this.key(i), s.text, v.id, v.e === 'k' ? kLang(v.id) : fam(), priority); },
+  // Keep rendering ahead of the listener, playing or not, until about four minutes are ready.
+  ahead(){ let t = 0; if(!S.book) return 0; for(let i = S.idx; i < S.sents.length; i++){ const a = this.cache.get(this.key(i)); if(a) t += a.a.length / a.sr; else if(/[\p{L}\p{N}]/u.test(S.sents[i].text)) break; } return t; },
+  fill(){
+    if(this.state !== 'ready' || !S.book || !useNeural() || this.engine !== voice().e || this.pend.size >= 2) return;
+    let t = 0;
+    for(let i = S.idx; i < S.sents.length && i < S.idx + 80; i++){
+      const k = this.key(i), a = this.cache.get(k);
+      if(a){ t += a.a.length / a.sr; if(t > 240) return; continue; }
+      if(this.pend.has(k) || !/[\p{L}\p{N}]/u.test(S.sents[i].text)) continue;
+      this.sentence(i, false); if(this.pend.size >= 2) return;
+    }
+  },
+  trim(){ if(!S.book) return this.cache.clear(); const sig = [S.book.id, S.ch].join('|') + '|', tail = '|' + vkey(voice() || { e:'', id:'' }) + '|' + prefs.rate;
+    for(const k of this.cache.keys()){ const i = +k.split('|')[2]; if(!k.startsWith(sig) || !k.endsWith(tail) || i < S.idx - 2) this.cache.delete(k); }
+    for(const k of this.cache.keys()){ if(this.cache.size <= 90) break; this.cache.delete(k); } },
+  clear(){ if(this.w) this.w.postMessage({ type:'clear' }); },
+  // A failed start is retried on the next tap. Only a second failure hands over to the system voice.
+  fail(){ if(this.state === 'failed') return; try{ this.w && this.w.terminate(); }catch(e){} this.w = null; this.engine = null; for(const [, p] of this.pend) p.resolve(null); this.pend.clear(); this.ids.clear();
+    if(++this.fails < 2){ this.state = 'idle'; if(S.playing) halt(); return say('The voice did not start. Tap play to try again.', 6000); }
+    this.state = 'failed'; setEngine(); say('Using the system voice on this device.', 4000); if(S.playing && S.mode !== 'system'){ S.token++; runSystem(); } }
+};
+
+// One <audio> element plays every clip. A tap pauses and resumes it at once, and it keeps going with the screen locked.
+const player = new Audio(); player.preload = 'auto'; player.setAttribute('playsinline', '');
+let clipDone = null, env = null, unlocked = false, selfPause = 0, meterOn = false, amp = 0, heldAt = 0;
+function wav(f32, rate, tail = 0){
+  const n = f32.length + Math.round(rate * tail), b = new ArrayBuffer(44 + n * 2), v = new DataView(b), w = (o, t) => { for(let i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i)); };
+  w(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); w(8, 'WAVEfmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, 'data'); v.setUint32(40, n * 2, true);
+  for(let i = 0; i < f32.length; i++){ const x = Math.max(-1, Math.min(1, f32[i])); v.setInt16(44 + i * 2, x * 32767, true); }
+  return new Blob([b], { type:'audio/wav' });
+}
+// The first play must come from a tap. Playing a moment of silence then lets later clips start on their own.
+function unlock(){ if(unlocked) return; unlocked = true; try{ player.src = URL.createObjectURL(wav(new Float32Array(441), 44100)); const p = player.play(); if(p) p.catch(() => {}); }catch(e){} }
+function loudness(f32, rate){ const step = rate / 30, out = new Float32Array(Math.ceil(f32.length / step)); for(let k = 0; k < out.length; k++){ let s = 0; const a = Math.floor(k * step), b = Math.min(f32.length, Math.floor(a + step)); for(let i = a; i < b; i += 4) s += f32[i] * f32[i]; out[k] = Math.sqrt(s / Math.max(1, (b - a) / 4)); } return out; }
+// The pause after a sentence is part of the clip itself, so the next one can start with no timer in between. Timers stall when the phone locks.
+function playClip(a, tail = 0){
+  stopClip();
+  return new Promise(res => {
+    const url = URL.createObjectURL(a instanceof Blob ? a : wav(a.a, a.sr, tail)); env = a instanceof Blob ? null : loudness(a.a, a.sr);
+    const done = () => { if(clipDone !== done) return; clipDone = null; player.onended = player.onerror = null; URL.revokeObjectURL(url); res(); };
+    clipDone = done; player.onended = done; player.onerror = done; player.src = url;
+    const p = player.play(); if(p) p.catch(e => { if(clipDone !== done) return; if(e && e.name === 'NotAllowedError'){ S.paused = true; setPlaying(false); } else if(e && e.name !== 'AbortError') done(); });
+  });
+}
+function stopClip(){ if(clipDone){ if(!player.paused){ selfPause++; player.pause(); } clipDone(); } }
+// If the system stops the sound (a call, another app), show the truth instead of a play state that is not playing.
+player.addEventListener('pause', () => { if(selfPause > 0){ selfPause--; return; } if(S.playing && clipDone && !player.ended){ S.paused = true; setPlaying(false); hold(); } });
+player.addEventListener('playing', () => { if(S.paused && clipDone && !S.playing){ S.paused = false; setPlaying(true); } });
+function meter(){ if(!S.playing){ meterOn = false; $('#dot').style.setProperty('--amp', 0); return; }
+  if(S.mode === 'neural'){ const v = env ? (env[Math.floor(player.currentTime * 30)] || 0) : 0; amp += (Math.min(1, v * 7) - amp) * .3; $('#dot').style.setProperty('--amp', amp.toFixed(3)); }
+  requestAnimationFrame(meter); }
+
+let wake = null;
+async function keepAwake(on){ try{ if(on){ if(!wake && navigator.wakeLock && !document.hidden){ wake = await navigator.wakeLock.request('screen'); wake.addEventListener('release', () => { wake = null; }); } } else if(wake){ const w = wake; wake = null; await w.release(); } }catch(e){} }
+function setPlaying(p){ keepAwake(p); S.playing = p; document.body.classList.toggle('playing', p); if(p) document.body.classList.remove('held'); $('#dot').setAttribute('aria-label', p ? 'Pause' : 'Play'); if(!p) busy(false); else if(!meterOn){ meterOn = true; requestAnimationFrame(meter); } try{ navigator.mediaSession.playbackState = p ? 'playing' : 'paused'; }catch(e){} }
+const busy = b => $('#dot').classList.toggle('busy', b);
+// On pause the passage stays lit until the reader scrolls away, so it is easy to find again.
+function hold(){ const s = S.sents[S.idx]; if(!s) return; if(lastOn && lastOn !== s.el) lastOn.classList.remove('on'); s.el.classList.add('on'); lastOn = s.el; heldAt = scrollY; document.body.classList.add('held'); placeHere(); }
+
+function play(){
+  if(!S.book || S.playing) return;
+  unlock();
+  if(S.paused && clipDone){ S.paused = false; setPlaying(true); const p = player.play(); if(p) p.catch(() => { S.paused = true; setPlaying(false); }); return; }
+  S.paused = false; setPlaying(true); peek();
+  if(useNeural()){ TTS.start(); runNeural(); } else runSystem();
+}
+function pause(){
+  if(!S.playing) return;
+  if(S.mode === 'neural' && clipDone && !player.paused){ S.paused = true; selfPause++; player.pause(); setPlaying(false); flushPos(); }
+  else halt();
+  hold();
+}
+function halt(){ S.token++; S.paused = false; stopClip(); try{ speechSynthesis.cancel(); }catch(e){} TTS.clear(); setPlaying(false); flushPos(); }
+function jump(i){ halt(); S.idx = Math.max(0, Math.min(S.sents.length - 1, i)); play(); }
+function step(d){ if(S.playing || S.paused) jump(S.idx + d); else { S.idx = Math.max(0, Math.min(S.sents.length - 1, S.idx + d)); mark(S.idx); savePos(); TTS.fill(); } }
+
+async function advance(t){ if(S.ch >= S.spine.length - 1){ setPlaying(false); return false; } await loadChapter(S.ch + 1); return t === S.token; }
+async function runNeural(){
+  const t = ++S.token; S.mode = 'neural'; document.body.classList.remove('sys');
+  while(t === S.token){
+    const s = S.sents[S.idx];
+    if(!s){ if(await advance(t)) continue; return; }
+    mark(S.idx); savePos();
+    busy(true);
+    const a = await TTS.sentence(S.idx, true);
+    if(t !== S.token) return;
+    if(!a && TTS.state !== 'ready' && /[\p{L}\p{N}]/u.test(s.text)) return;
+    busy(false);
+    TTS.fill();
+    if(a){ await playClip(a, s.last ? .34 : .06); if(t !== S.token) return; }
+    S.idx++;
+  }
+}
+
+/* ---------- system voice fallback ---------- */
+const synth = window.speechSynthesis; let sysVoice = null;
+function pickSys(){
+  if(!synth) return null; const bl = S.lang || 'en';
+  const score = v => { let s = 0; const n = v.name, vl = (v.lang || '').toLowerCase().replace('_', '-');
+    if(vl === bl) s += 40; else if(vl.slice(0, 2) === bl.slice(0, 2)) s += 30;
+    if(/natural|neural/i.test(n)) s += 14; if(/premium/i.test(n)) s += 13; if(/enhanced/i.test(n)) s += 11; if(/^google/i.test(n)) s += 8;
+    if(/(compact|espeak|bad news|bells|boing|bubbles|cellos|jester|organ|trinoids|zarvox|superstar|wobble|albert|fred|junior|ralph|kathy|grandma|grandpa|eddy|flo|reed|rocko|sandy|shelley|whisper)/i.test(n)) s -= 30;
+    return s; };
+  const list = synth.getVoices().filter(v => (v.lang || '').slice(0, 2).toLowerCase() === bl.slice(0, 2)).sort((a, b) => score(b) - score(a));
+  const saved = prefs.voice['sys:' + fam()];
+  sysVoice = list.find(v => v.name === saved) || list[0] || null; return list;
+}
+if(synth) synth.onvoiceschanged = () => { if(S.book && !useNeural()) setEngine(); };
+function runSystem(){
+  const t = ++S.token; S.mode = 'system'; document.body.classList.add('sys');
+  if(!synth){ setPlaying(false); return say('This browser has no voice.', 4000); }
+  const next = async () => {
+    if(t !== S.token) return; synth.cancel();
+    const s = S.sents[S.idx];
+    if(!s){ if(await advance(t)) next(); return; }
+    mark(S.idx); savePos();
+    if(!/[\p{L}\p{N}]/u.test(s.text)){ S.idx++; return next(); }
+    const u = new SpeechSynthesisUtterance(s.text); if(sysVoice){ u.voice = sysVoice; u.lang = sysVoice.lang; } else u.lang = S.lang; u.rate = prefs.rate;
+    u.onend = () => { if(t === S.token){ S.idx++; next(); } };
+    u.onerror = e => { if(t === S.token && e.error !== 'interrupted' && e.error !== 'canceled'){ S.idx++; next(); } };
+    setTimeout(() => t === S.token && synth.speak(u), 40);
+  };
+  next();
+}
+
+/* ---------- controls ---------- */
+function setEngine(){
+  let name;
+  if(useNeural()) name = voice().name;
+  else { pickSys(); name = sysVoice ? sysVoice.name.replace(/^(Microsoft|Google) /, '').replace(/ Online.*| \(.*/, '') : 'Voice'; }
+  $('#voiceBtn').textContent = name;
+  $('#rateBtn').textContent = String(prefs.rate).replace(/^0/, '') + '×';
+}
+$('#dot').onclick = () => S.playing ? pause() : play();
+$('#rateBtn').onclick = () => { prefs.rate = RATES[(RATES.indexOf(prefs.rate) + 1) % RATES.length] || 1; savePrefs(); setEngine(); TTS.trim(); if(S.playing || S.paused) jump(S.idx); else TTS.fill(); };
+let statusTimer = null;
+function say(msg, ms = 3000){ $('#status').textContent = msg; clearTimeout(statusTimer); if(msg && ms) statusTimer = setTimeout(() => $('#status').textContent = '', ms); }
+let peekTimer = null;
+function peek(){ document.body.classList.add('peek'); clearTimeout(peekTimer); peekTimer = setTimeout(() => document.body.classList.remove('peek'), 2600); }
+addEventListener('pointermove', peek, { passive:true }); addEventListener('pointerdown', peek, { passive:true });
+
+function openSheet(build){ const sh = $('#sheet'); sh.innerHTML = ''; build(sh); sh.scrollTop = 0; document.body.classList.add('sheet'); sh.setAttribute('aria-hidden', 'false'); const on = sh.querySelector('.on'); if(on) on.scrollIntoView({ block:'center' }); }
+function closeSheet(){ document.body.classList.remove('sheet'); $('#sheet').setAttribute('aria-hidden', 'true'); }
+$('#scrim').onclick = closeSheet;
+const row = (label, meta, on, cls = '') => { const r = el('button', 'row ' + cls + (on ? ' on' : ''), `<i></i><span>${esc(label)}</span>${meta ? `<small>${esc(meta)}</small>` : ''}`); return r; };
+
+function buildToc(sh, tab){
+  sh.innerHTML = ''; const hl = S.book.hl || [];
+  if(hl.length){ const seg = el('div', 'seg'); for(const [k, label] of [['toc', 'Contents'], ['hl', 'Highlights']]){ const b = el('button', k === tab ? 'on' : '', label); b.onclick = () => buildToc(sh, k); seg.appendChild(b); } sh.appendChild(seg); }
+  if(tab === 'hl'){
+    [...hl].sort((a, b) => a.ch - b.ch || a.p - b.p).forEach(h => { const r = el('button', 'row note', `<i></i><span>${esc(h.text)}</span>`); r.onclick = () => { closeSheet(); goMark(h); }; sh.appendChild(r); });
+    return;
+  }
+  const list = S.toc.length ? S.toc : S.spine.map((s, i) => ({ label:String(i + 1), ch:i, depth:0 }));
+  let cur = -1; list.forEach((t, k) => { if(t.ch <= S.ch) cur = k; });
+  list.forEach((t, k) => { const r = row(t.label, '', k === cur, t.depth ? 'd1' : ''); r.onclick = () => { closeSheet(); goChapter(t.ch, t.frag); }; sh.appendChild(r); });
+}
+$('#tocBtn').onclick = () => openSheet(sh => buildToc(sh, 'toc'));
+const SAMPLES = new Map();
+function sample(v){
+  const key = v.e === 'k' ? 'k-' + v.id : 's-' + (fam() === 'es' ? 'es' : 'en') + '-' + v.id;
+  if(!SAMPLES.has(key)) SAMPLES.set(key, fetch('tts/samples/' + key + '.mp3').then(r => { if(!r.ok) throw new Error(r.status); return r.blob(); }).catch(e => { SAMPLES.delete(key); throw e; }));
+  return SAMPLES.get(key);
+}
+function buildVoices(sh, tab){
+  sh.innerHTML = ''; const all = voicesFor(fam()), cur = voice();
+  if(all.k.length && all.s.length){ const seg = el('div', 'seg'); for(const k of ['k', 's']){ const b = el('button', k === tab ? 'on' : '', ENGINES[k].label); b.onclick = () => buildVoices(sh, k); seg.appendChild(b); } sh.appendChild(seg); }
+  (all[tab].length ? all[tab] : all.k.length ? all.k : all.s).forEach(v => { const r = row(v.name, v.tag, vkey(v) === vkey(cur));
+    r.onclick = async () => { prefs.voice[fam()] = vkey(v); savePrefs(); setEngine(); sh.querySelectorAll('.row').forEach(x => x.classList.toggle('on', x === r));
+      halt(); TTS.trim(); unlock(); TTS.start();
+      try{ const t = S.token; const b = await sample(v); if(t !== S.token) return; playClip(b); TTS.fill(); }catch(e){ console.warn(e); say('That sample would not play.'); } };
+    sh.appendChild(r); });
+}
+$('#voiceBtn').onclick = () => openSheet(sh => {
+  if(useNeural()) return buildVoices(sh, voice().e);
+  const list = pickSys() || [];
+  if(!list.length) sh.appendChild(row('No voice for this language', '', false));
+  list.forEach(v => { const r = row(v.name.replace(/^Microsoft /, ''), v.lang, v === sysVoice); r.onclick = () => { prefs.voice['sys:' + fam()] = v.name; savePrefs(); setEngine(); closeSheet(); if(S.playing) jump(S.idx); }; sh.appendChild(r); });
+});
+
+addEventListener('keydown', e => {
+  if(e.key === 'Escape'){ if(document.body.classList.contains('sheet')) closeSheet(); else if(S.book) closeBook(); return; }
+  if(!S.book || document.body.classList.contains('sheet') || e.metaKey || e.ctrlKey) return;
+  if(e.code === 'Space'){ e.preventDefault(); S.playing ? pause() : play(); }
+  else if(e.key === 'ArrowRight'){ e.preventDefault(); e.shiftKey ? goChapter(S.ch + 1) : step(1); }
+  else if(e.key === 'ArrowLeft'){ e.preventDefault(); e.shiftKey ? goChapter(S.ch - 1) : step(-1); }
+});
+try{ const ms = navigator.mediaSession; for(const [k, f] of [['play', play], ['pause', pause], ['previoustrack', () => step(-1)], ['nexttrack', () => step(1)], ['seekbackward', () => step(-1)], ['seekforward', () => step(1)]]){ try{ ms.setActionHandler(k, f); }catch(e){} } }catch(e){}
+
+/* ---------- readout for troubleshooting: add #debug to the address ---------- */
+if(location.hash === '#debug'){
+  const d = el('pre'); d.style.cssText = 'position:fixed;top:60px;right:8px;z-index:99;font:12px/1.5 ui-monospace,Menlo,monospace;color:var(--ink);background:var(--bg);padding:10px 12px;border-radius:10px;pointer-events:none;white-space:pre';
+  document.body.appendChild(d);
+  setInterval(() => { const st = TTS.stats, inf = TTS.info;
+    d.textContent = ['engine ' + (TTS.engine || 'none') + ' ' + TTS.state + (inf ? '  load ' + inf.loadMs + ' ms  cache ' + inf.cached + '/' + inf.files + '  threads ' + inf.threads : ''),
+      st ? 'last clip  ' + st.steps + ' steps  ' + st.rtf.toFixed(2) + ' s per s of speech  ' + Math.round(st.ms) + ' ms' : 'no clip yet',
+      'ready ahead ' + TTS.ahead().toFixed(0) + ' s  clips ' + TTS.cache.size + '  queued ' + TTS.pend.size,
+      'mode ' + S.mode + '  playing ' + S.playing + '  audio ' + (player.paused ? 'paused' : 'running') + (S.paused ? ' (held)' : '') + '  sentence ' + S.idx + '/' + S.sents.length,
+      'isolated ' + self.crossOriginIsolated + '  cores ' + navigator.hardwareConcurrency + '  gpu ' + !!navigator.gpu].join('\n'); }, 400);
+}
+
+/* ---------- boot ---------- */
+renderHome();
+DB.all().then(list => {
+  if(list.length){ LIB = list.concat(LIB.filter(b => !list.some(x => x.id === b.id))); }
+  for(const b of LIB){ const lp = store.get('lector:pos:' + b.id); if(lp && (lp.t || 0) >= (b.posT || 0)){ b.pos = { ch:lp.ch, idx:lp.idx }; if(lp.progress) b.progress = lp.progress; b.last = Math.max(b.last || 0, lp.t || 0); } }
+  if(!S.book) renderHome();
+  const open = store.get('lector:open'); if(open && !S.book && LIB.some(b => b.id === open)) openBook(open);
+  repairCovers();
+});
+// The service worker makes the app work offline and unlocks multi-threaded voice synthesis. The first visit reloads once to switch it on.
+if('serviceWorker' in navigator && (location.protocol === 'https:' || /^(localhost|127\.0\.0\.1)$/.test(location.hostname))){
+  navigator.serviceWorker.register('sw.js').then(() => {
+    let done = false; try{ done = !!sessionStorage.getItem('lector:coi'); }catch(e){}
+    if(self.crossOriginIsolated || done) return;
+    const again = () => { try{ sessionStorage.setItem('lector:coi', '1'); }catch(e){} location.reload(); };
+    if(navigator.serviceWorker.controller) again(); else navigator.serviceWorker.addEventListener('controllerchange', again, { once:true });
+  }).catch(() => {});
+}
+window.__lector = { S, TTS, LIB:() => LIB, prefs, player };
+</script>
+</body>
+</html>
