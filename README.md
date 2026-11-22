@@ -13,7 +13,7 @@ After the first voice download it works with no connection.
 
 - A library of covers. Books stay in the browser storage of each device.
 - Reads aloud with a neural voice that runs locally, sentence by sentence, rendering up to four minutes ahead.
-- One voice engine, Kokoro: English, Spanish, French, Italian and Portuguese. Other languages use the device's own voice.
+- Kokoro reads English, French, Italian and Portuguese. Supertonic 3 reads Spanish. Other languages use the device's own voice.
 - Remembers your place per book, and reopens the book you had open.
 - Long press a paragraph to highlight it. Pinch to resize the text.
 - Lock screen, Control Center and menu bar controls through the system's Now Playing.
@@ -27,6 +27,7 @@ No build step. Static files only.
 | `index.html` | The whole app |
 | `sw.js` | Offline shell, and the isolation headers that allow multi-threaded synthesis on a static host |
 | `tts/kokoro/` | Kokoro worker, model (int8, split in 20 MB parts), voices, phonemizers |
+| `tts/supertonic/` | Supertonic 3 worker and weights (Spanish) |
 | `tts/ort/` | ONNX Runtime Web |
 | `tts/samples/` | One pre-rendered line per voice |
 

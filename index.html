@@ -226,16 +226,17 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const OPS = 'http://www.idpf.org/2007/ops', XLINK = 'http://www.w3.org/1999/xlink';
 
 /* ---------- voices ---------- */
-// One voice engine: Kokoro. Languages it does not speak use the device's own voice.
+// Kokoro reads English, French, Italian and Portuguese. Supertonic 3 reads Spanish. Anything else uses the device's own voice.
 const K_VOICES = {
   en: [['af_heart', 'Heart', 'US'], ['af_bella', 'Bella', 'US'], ['af_nicole', 'Nicole', 'US'], ['af_aoede', 'Aoede', 'US'], ['af_kore', 'Kore', 'US'], ['af_sarah', 'Sarah', 'US'], ['am_fenrir', 'Fenrir', 'US'], ['am_michael', 'Michael', 'US'], ['am_puck', 'Puck', 'US'],
        ['bf_emma', 'Emma', 'UK'], ['bf_isabella', 'Isabella', 'UK'], ['bm_george', 'George', 'UK'], ['bm_fable', 'Fable', 'UK']],
-  es: [['ef_dora', 'Dora', ''], ['em_alex', 'Alex', ''], ['em_santa', 'Santa', '']], fr: [['ff_siwis', 'Siwis', '']], it: [['if_sara', 'Sara', ''], ['im_nicola', 'Nicola', '']], pt: [['pf_dora', 'Dora', ''], ['pm_alex', 'Alex', '']]
+  fr: [['ff_siwis', 'Siwis', '']], it: [['if_sara', 'Sara', ''], ['im_nicola', 'Nicola', '']], pt: [['pf_dora', 'Dora', ''], ['pm_alex', 'Alex', '']]
 };
-K_VOICES.ca = K_VOICES.es; // Catalan text, Spanish voices, Catalan pronunciation rules
+const S_VOICES = { es: ['Alba', 'Nora', 'Iris', 'Vera', 'Lena', 'Leo', 'Marc', 'Otto', 'Teo', 'Hugo'] };
 const WEIGHTS = window.LECTOR_FALLBACK || 'https://raw.githubusercontent.com/frilo-io/lector/main/';
 const ENGINES = {
-  k: { worker:'tts/kokoro/worker.js', manifest:{"rt":[{"file":"ort-wasm-simd-threaded.wasm","size":14848852}],"model":[{"file":"model/q8-0.bin","size":20000000},{"file":"model/q8-1.bin","size":20000000},{"file":"model/q8-2.bin","size":20000000},{"file":"model/q8-3.bin","size":20000000},{"file":"model/q8-4.bin","size":12361271}],"voices":["af_heart","af_bella","af_nicole","af_aoede","af_kore","af_sarah","am_fenrir","am_michael","am_puck","bf_emma","bf_isabella","bm_george","bm_fable","ef_dora","em_alex","em_santa","ff_siwis","if_sara","im_nicola","pf_dora","pm_alex"]} },
+  s: { worker:'tts/supertonic/worker.js', manifest:{"idx":[{"file":"w/idx-0.bin","size":262144}],"voice":[{"file":"w/voice-0.bin","size":517168}],"dp":[{"file":"w/dp-0.bin","size":3700147}],"te":[{"file":"w/te-0.bin","size":20000000},{"file":"w/te-1.bin","size":16416150}],"ve":[{"file":"w/ve-0.bin","size":20000000},{"file":"w/ve-1.bin","size":20000000},{"file":"w/ve-2.bin","size":20000000},{"file":"w/ve-3.bin","size":18400833}],"voc":[{"file":"w/voc-0.bin","size":20000000},{"file":"w/voc-1.bin","size":5991073}],"rt":[{"file":"ort-wasm-simd-threaded.wasm","size":14848852}]} },
+  k: { worker:'tts/kokoro/worker.js', manifest:{"rt":[{"file":"ort-wasm-simd-threaded.wasm","size":14848852}],"model":[{"file":"model/q8-0.bin","size":20000000},{"file":"model/q8-1.bin","size":20000000},{"file":"model/q8-2.bin","size":20000000},{"file":"model/q8-3.bin","size":20000000},{"file":"model/q8-4.bin","size":12361271}],"voices":["af_heart","af_bella","af_nicole","af_aoede","af_kore","af_sarah","am_fenrir","am_michael","am_puck","bf_emma","bf_isabella","bm_george","bm_fable","ff_siwis","if_sara","im_nicola","pf_dora","pm_alex"]} },
 };
 const RATES = [0.8, 0.9, 1, 1.1, 1.2, 1.35, 1.5];
 
@@ -629,13 +630,13 @@ addEventListener('pagehide', flushPos);
 
 /* ---------- neural voice ---------- */
 const fam = () => (S.lang || 'en').slice(0, 2);
-const voicesFor = f => (K_VOICES[f] || []).map(([id, name, tag]) => ({ e:'k', id, name, tag }));
+const voicesFor = f => S_VOICES[f] ? S_VOICES[f].map((name, id) => ({ e:'s', id, name, tag:'' })) : (K_VOICES[f] || []).map(([id, name, tag]) => ({ e:'k', id, name, tag }));
 function voice(){
   const all = voicesFor(fam()); if(!all.length) return null;
   return all.find(x => x.e + ':' + x.id === prefs.voice[fam()]) || (fam() === 'en' && /gb|uk|au|nz|ie/.test(S.lang) && all.find(x => x.id === 'bf_emma')) || all[0];
 }
 const vkey = v => v.e + ':' + v.id;
-const kLang = id => ({ a:'en-us', b:'en', e: fam() === 'ca' ? 'ca' : 'es', f:'fr-fr', i:'it', p: /pt-pt/.test(S.lang) ? 'pt' : 'pt-br' })[id[0]];
+const kLang = id => ({ a:'en-us', b:'en', f:'fr-fr', i:'it', p: /pt-pt/.test(S.lang) ? 'pt' : 'pt-br' })[id[0]];
 const useNeural = () => TTS.state !== 'failed' && !!voice();
 
 const TTS = {
@@ -668,7 +669,7 @@ const TTS = {
     return promise;
   },
   key(i){ return [S.book.id, S.ch, i, vkey(voice()), prefs.rate].join('|'); },
-  sentence(i, priority){ const s = S.sents[i]; if(!s || !/[\p{L}\p{N}]/u.test(s.text)) return Promise.resolve(null); this.start(); if(!this.w) return Promise.resolve(null); const v = voice(); return this.get(this.key(i), s.text, v.id, kLang(v.id), priority); },
+  sentence(i, priority){ const s = S.sents[i]; if(!s || !/[\p{L}\p{N}]/u.test(s.text)) return Promise.resolve(null); this.start(); if(!this.w) return Promise.resolve(null); const v = voice(); return this.get(this.key(i), s.text, v.id, v.e === 'k' ? kLang(v.id) : fam(), priority); },
   // Keep rendering ahead of the listener, playing or not, until about four minutes are ready.
   ahead(){ let t = 0; if(!S.book) return 0; for(let i = S.idx; i < S.sents.length; i++){ const a = this.cache.get(this.key(i)); if(a) t += a.a.length / a.sr; else if(/[\p{L}\p{N}]/u.test(S.sents[i].text)) break; } return t; },
   fill(){
@@ -832,7 +833,7 @@ function buildToc(sh, tab){
 $('#tocBtn').onclick = () => openSheet(sh => buildToc(sh, 'toc'));
 const SAMPLES = new Map();
 function sample(v){
-  const key = 'k-' + v.id;
+  const key = v.e === 'k' ? 'k-' + v.id : 's-' + fam() + '-' + v.id;
   if(!SAMPLES.has(key)) SAMPLES.set(key, fetch('tts/samples/' + key + '.mp3').then(r => { if(!r.ok) throw new Error(r.status); return r.blob(); }).catch(e => { SAMPLES.delete(key); throw e; }));
   return SAMPLES.get(key);
 }
