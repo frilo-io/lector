@@ -125,7 +125,8 @@ body.playing #page .s.on,body.held #page .s.on{color:var(--ink)}
 #next:hover{color:var(--ink)}
 
 /* ---------- control ---------- */
-#dock{position:fixed;left:50%;bottom:max(18px,env(safe-area-inset-bottom));transform:translateX(-50%);z-index:26;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:6px;border-radius:999px;background:var(--bg);box-shadow:var(--shadow)}
+#dock{position:fixed;left:50%;transform:translateX(-50%);z-index:26;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:6px;border-radius:999px;isolation:isolate}
+#dock::before{content:"";position:absolute;inset:0;border-radius:999px;background:var(--bg);box-shadow:var(--shadow);z-index:-1}
 /* Both sides share one width, so the play button never moves when they open or close. */
 .side{display:flex;align-items:center;overflow:hidden;max-width:220px;transition:max-width .5s var(--ease),opacity .3s}
 .side.l{justify-self:end}
@@ -148,6 +149,29 @@ body.sys.playing #dot::after{animation:breathe 1.6s ease-in-out infinite}
 @keyframes breathe{50%{opacity:.7;transform:scale(1.5)}}
 #status{position:fixed;left:50%;bottom:calc(max(18px,env(safe-area-inset-bottom)) + 70px);transform:translateX(-50%);z-index:26;font-size:13px;color:var(--dim);font-variant-numeric:tabular-nums;white-space:nowrap;pointer-events:none;transition:opacity .4s}
 #status:empty{opacity:0}
+
+/* ---------- the orb: --z runs from 0 (text) to 1 (no text, only the voice) ---------- */
+@property --z{syntax:'<number>';inherits:true;initial-value:0}
+html.zsnap{transition:--z .7s var(--ease)}
+html.zing #page{opacity:calc(1 - var(--z));filter:blur(calc(var(--z) * 14px));transform:scale(calc(1 - var(--z) * .05));transform-origin:50% 45vh}
+html.zen #page{visibility:hidden}
+html.zen .side{max-width:0;opacity:0}
+html.zen body.playing #dot svg{opacity:0}
+#dock{bottom:calc(max(18px,env(safe-area-inset-bottom)) + var(--z) * (50dvh - 62px))}
+#dock::before{opacity:calc(1 - var(--z))}
+#dot{scale:calc(1 + var(--z) * 2.6)}
+#dot::after{border-width:calc(1.5px / (1 + var(--z) * 2.6))}
+.orb{position:absolute;inset:-55%;border-radius:50%;z-index:-1;pointer-events:none;background:radial-gradient(circle,color-mix(in srgb,var(--accent) 70%,transparent) 0,color-mix(in srgb,var(--accent) 22%,transparent) 38%,transparent 68%);opacity:calc(var(--z) * (.35 + var(--amp,0) * .65));transform:scale(calc(.82 + var(--amp,0) * .5));transition:transform .12s linear}
+
+/* ---------- speed: choices bud out of the control and melt back ---------- */
+#rates{position:fixed;z-index:27;width:52px;height:52px;pointer-events:none}
+#rates .goo{position:absolute;inset:0;filter:url(#goo) drop-shadow(0 6px 14px rgba(0,0,0,.16))}
+#rates .goo i,#rates .lab button{position:absolute;left:0;top:0;width:52px;height:52px;border-radius:50%;transform:translateY(0) scale(.5);transition:transform .6s var(--spring),opacity .25s;transition-delay:var(--d,0s)}
+#rates .goo i{background:var(--bg)}
+#rates .lab button{display:grid;place-items:center;font-size:14px;font-variant-numeric:tabular-nums;color:var(--dim);opacity:0}
+#rates .lab button.on{color:var(--ink)}
+#rates.open .goo i,#rates.open .lab button{transform:translateY(var(--y)) scale(1)}
+#rates.open .lab button{opacity:1;pointer-events:auto}
 
 /* ---------- sheet ---------- */
 #scrim{position:fixed;inset:0;background:rgba(0,0,0,.28);opacity:0;pointer-events:none;transition:opacity .35s;z-index:40}
@@ -190,10 +214,13 @@ body.dragging::after{content:"";position:fixed;inset:0;z-index:60;background:lin
   <button id="dot" aria-label="Play">
     <svg class="pl" viewBox="0 0 16 16" fill="currentColor"><path d="M4.5 2.4v11.2L14 8z"/></svg>
     <svg class="pa" viewBox="0 0 16 16" fill="currentColor"><path d="M3.5 2.5h3v11h-3zM9.5 2.5h3v11h-3z"/></svg>
+    <i class="orb"></i>
   </button>
   <div class="side r"><button class="x" id="voiceBtn" aria-label="Voice"></button></div>
 </div>
 
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="goo"><feGaussianBlur in="SourceGraphic" stdDeviation="7"/><feColorMatrix values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -8"/></filter></svg>
+<div id="rates" hidden><div class="goo"></div><div class="lab"></div></div>
 <div id="scrim"></div>
 <section id="sheet" aria-hidden="true"></section>
 <input type="file" id="file" accept=".epub,application/epub+zip" multiple hidden>
@@ -226,7 +253,7 @@ const store = { get(k){ try{ return JSON.parse(localStorage.getItem(k)); }catch(
 const saved = store.get('lector:prefs') || {};
 const FS_MIN = 14, FS_MAX = 40, clampFs = v => Math.max(FS_MIN, Math.min(FS_MAX, v));
 const prefs = { rate: RATES.includes(saved.rate) ? saved.rate : 1, voice: saved.voice && typeof saved.voice === 'object' && !Array.isArray(saved.voice) ? saved.voice : {},
-  fs: Number.isFinite(saved.fs) ? clampFs(saved.fs) : (innerWidth < 520 ? 19 : 21), theme: ['auto', 'light', 'dark'].includes(saved.theme) ? saved.theme : 'auto' };
+  fs: Number.isFinite(saved.fs) ? clampFs(saved.fs) : (innerWidth < 520 ? 19 : 21), theme: ['auto', 'light', 'dark'].includes(saved.theme) ? saved.theme : 'auto', zen: !!saved.zen };
 const savePrefs = () => store.set('lector:prefs', prefs);
 
 const root = document.documentElement, reduced = matchMedia('(prefers-reduced-motion:reduce)').matches;
@@ -243,6 +270,7 @@ $('#theme').onclick = e => {
 };
 const applyFs = () => root.style.setProperty('--fs', prefs.fs.toFixed(2) + 'px');
 applyTheme(); applyFs();
+requestAnimationFrame(() => setZ(prefs.zen ? 1 : 0));
 
 const S = { book:null, zip:null, spine:[], toc:[], lang:'en', ch:0, sents:[], idx:0, playing:false, paused:false, token:0, mode:'neural', blobs:[] };
 let LIB = []; const FILES = new Map(), COVERS = new Map();
@@ -428,7 +456,7 @@ async function nowPlaying(meta){
     navigator.mediaSession.metadata = new MediaMetadata({ title:meta.title, artist:meta.author || '', album:'Lector', artwork:art });
   }catch(e){}
 }
-function closeBook(){ halt(); flushPos(); document.body.classList.remove('held'); store.set('lector:open', null); S.book = null; document.title = 'Lector'; closeSheet(); renderHome(); show('home'); }
+function closeBook(){ closeRates(); halt(); flushPos(); document.body.classList.remove('held'); store.set('lector:open', null); S.book = null; document.title = 'Lector'; closeSheet(); renderHome(); show('home'); }
 $('#back').onclick = closeBook;
 
 const BLOCKS = new Set('address article aside blockquote body dd details div dl dt figcaption figure footer form h1 h2 h3 h4 h5 h6 header hgroup li main nav ol p pre section table tbody thead tfoot tr td th caption ul'.split(' '));
@@ -543,7 +571,8 @@ async function goMark(h){
 }
 
 // Pinch to resize the text: two fingers on a phone, a trackpad pinch or Ctrl and scroll on a Mac. The passage under the fingers stays put.
-let pinch = null, fsTimer = null;
+// Keep pinching past the smallest size and the text dissolves: only the voice is left. Pinch out to bring the page back at the size it had.
+const ZR = 4; let pinch = null, fsTimer = null, wheelEnd = null, zen = 0;
 function setFs(v, anchor){
   v = clampFs(v); if(Math.abs(v - prefs.fs) < .05) return;
   const top = anchor && anchor.el.getBoundingClientRect().top;
@@ -551,14 +580,32 @@ function setFs(v, anchor){
   if(anchor) scrollBy(0, anchor.el.getBoundingClientRect().top - top);
   placeHere(); clearTimeout(fsTimer); fsTimer = setTimeout(savePrefs, 400);
 }
+function setZ(z, snap){ zen = Math.max(0, Math.min(1, z)); root.classList.toggle('zsnap', !!snap); root.style.setProperty('--z', zen.toFixed(3)); root.classList.toggle('zing', zen > 0); root.classList.toggle('zen', zen > .999); }
 const anchorAt = y => { const e = document.elementFromPoint(innerWidth / 2, y); const el2 = e && (e.closest('.s') || e.closest('[data-p]')); return el2 ? { el:el2 } : (S.sents[S.idx] ? { el:S.sents[S.idx].el } : null); };
+// A long pinch can arrive as several short ones. They count as one, so the size to come back to is the size before the first.
+let chainFs = 0, chainAt = 0;
+function pinchStart(y){ endPress(); if(performance.now() - chainAt > 1500) chainFs = prefs.fs; return { u0: prefs.zen ? FS_MIN - ZR : prefs.fs, fs0:chainFs, fromZen:!!prefs.zen, anchor: prefs.zen ? null : anchorAt(y) }; }
+function pinchTo(p, u){
+  if(p.fromZen) return setZ((FS_MIN - u) / ZR);
+  if(u >= FS_MIN){ setZ(0); setFs(u, p.anchor); } else { setFs(FS_MIN, p.anchor); setZ((FS_MIN - u) / ZR); }
+}
+function pinchEnd(p){
+  const on = zen > .5; setZ(on ? 1 : 0, true); chainAt = performance.now();
+  if(on && !p.fromZen) setTimeout(() => { prefs.fs = p.fs0; applyFs(); savePrefs(); }, 720);   // the page comes back at the size it had
+  if(!on && p.fromZen) setTimeout(() => { placeHere(); const s = S.sents[S.idx]; if(s) s.el.scrollIntoView({ block:'center' }); }, 30);
+  prefs.zen = on; savePrefs();
+}
+function exitZen(){ setZ(0, true); prefs.zen = false; savePrefs(); setTimeout(() => { placeHere(); const x = S.sents[S.idx]; if(x) x.el.scrollIntoView({ block:'center' }); }, 30); }
 const spread = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
-$('#reader').addEventListener('touchstart', e => { if(e.touches.length === 2){ endPress(); pinch = { d:spread(e.touches), fs:prefs.fs, anchor:anchorAt((e.touches[0].clientY + e.touches[1].clientY) / 2) }; } }, { passive:true });
-$('#reader').addEventListener('touchmove', e => { if(pinch && e.touches.length === 2){ e.preventDefault(); setFs(pinch.fs * spread(e.touches) / pinch.d, pinch.anchor); } }, { passive:false });
-$('#reader').addEventListener('touchend', e => { if(e.touches.length < 2) pinch = null; });
-$('#reader').addEventListener('wheel', e => { if(!e.ctrlKey) return; e.preventDefault(); setFs(prefs.fs * Math.exp(-e.deltaY * .01), anchorAt(e.clientY)); }, { passive:false });
-for(const n of ['gesturestart', 'gesturechange']) $('#reader').addEventListener(n, e => { e.preventDefault(); if(pinch && pinch.d) return; if(n === 'gesturestart' || !pinch) pinch = { fs:prefs.fs, anchor:anchorAt(e.clientY || innerHeight / 2) }; else setFs(pinch.fs * e.scale, pinch.anchor); });
-$('#reader').addEventListener('gestureend', () => { if(pinch && !pinch.d) pinch = null; });
+addEventListener('touchstart', e => { if(S.book && e.touches.length === 2){ pinch = pinchStart((e.touches[0].clientY + e.touches[1].clientY) / 2); pinch.d = spread(e.touches); } }, { passive:true });
+addEventListener('touchmove', e => { if(pinch && pinch.d && e.touches.length === 2){ e.preventDefault(); pinchTo(pinch, pinch.u0 * spread(e.touches) / pinch.d); } }, { passive:false });
+addEventListener('touchend', e => { if(pinch && pinch.d && e.touches.length < 2){ pinchEnd(pinch); pinch = null; } });
+addEventListener('wheel', e => { if(!e.ctrlKey || !S.book) return; e.preventDefault(); if(!pinch){ pinch = pinchStart(e.clientY); pinch.u = pinch.u0; } if(pinch.d) return;
+  pinch.u = Math.max(FS_MIN - ZR * 1.5, Math.min(FS_MAX, pinch.u * Math.exp(-e.deltaY * .01))); pinchTo(pinch, pinch.u);
+  clearTimeout(wheelEnd); wheelEnd = setTimeout(() => { if(pinch && !pinch.d){ pinchEnd(pinch); pinch = null; } }, 260); }, { passive:false });
+addEventListener('gesturestart', e => { if(!S.book) return; e.preventDefault(); if(!pinch){ pinch = pinchStart(e.clientY || innerHeight / 2); pinch.g = true; } });
+addEventListener('gesturechange', e => { if(!S.book) return; e.preventDefault(); if(pinch && pinch.g) pinchTo(pinch, pinch.u0 * e.scale); });
+addEventListener('gestureend', () => { if(pinch && pinch.g){ pinchEnd(pinch); pinch = null; } });
 
 const prewarm = () => TTS.fill();
 let lastOn = null;
@@ -762,14 +809,31 @@ function setEngine(){
   if(useNeural()) name = voice().name;
   else { pickSys(); name = sysVoice ? sysVoice.name.replace(/^(Microsoft|Google) /, '').replace(/ Online.*| \(.*/, '') : 'Voice'; }
   $('#voiceBtn').textContent = name;
-  $('#rateBtn').textContent = String(prefs.rate).replace(/^0/, '') + '×';
+  $('#rateBtn').textContent = fmtRate(prefs.rate);
 }
 $('#dot').onclick = () => S.playing ? pause() : play();
-$('#rateBtn').onclick = () => { prefs.rate = RATES[(RATES.indexOf(prefs.rate) + 1) % RATES.length] || 1; savePrefs(); setEngine(); TTS.trim(); if(S.playing || S.paused) jump(S.idx); else TTS.fill(); };
+const fmtRate = r => String(r).replace(/^0/, '') + '×';
+let ratesOpen = false;
+function setRate(r){ if(r === prefs.rate) return; prefs.rate = r; savePrefs(); setEngine(); TTS.trim(); if(S.playing || S.paused) jump(S.idx); else TTS.fill(); }
+function openRates(){
+  const box = $('#rates'), goo = box.querySelector('.goo'), lab = box.querySelector('.lab'), b = $('#rateBtn').getBoundingClientRect();
+  box.style.left = (b.left + b.width / 2 - 26) + 'px'; box.style.top = (b.top + b.height / 2 - 26) + 'px';
+  goo.innerHTML = '<i style="--y:0px"></i>'; lab.innerHTML = '';
+  const base = el('button', 'on', fmtRate(prefs.rate)); base.style.setProperty('--y', '0px'); base.setAttribute('aria-label', 'Close speed'); base.onclick = closeRates; lab.appendChild(base);
+  RATES.forEach((r, k) => { const y = -(k + 1) * 56 - 6 + 'px', d = k * .03 + 's';
+    const blob = el('i'); blob.style.setProperty('--y', y); blob.style.setProperty('--d', d); goo.appendChild(blob);
+    const btn = el('button', r === prefs.rate ? 'on' : '', fmtRate(r)); btn.style.setProperty('--y', y); btn.style.setProperty('--d', d); btn.setAttribute('aria-label', 'Speed ' + r);
+    btn.onclick = () => { setRate(r); closeRates(); }; lab.appendChild(btn); });
+  box.hidden = false; ratesOpen = true; clearTimeout(peekTimer); document.body.classList.add('peek');
+  requestAnimationFrame(() => requestAnimationFrame(() => box.classList.add('open')));
+}
+function closeRates(){ if(!ratesOpen) return; const box = $('#rates'); ratesOpen = false; box.classList.remove('open'); setTimeout(() => { if(!ratesOpen) box.hidden = true; }, 650); peek(); }
+$('#rateBtn').onclick = () => ratesOpen ? closeRates() : openRates();
+addEventListener('pointerdown', e => { if(ratesOpen && !e.target.closest('#rates') && !e.target.closest('#rateBtn')) closeRates(); }, true);
 let statusTimer = null;
 function say(msg, ms = 3000){ $('#status').textContent = msg; clearTimeout(statusTimer); if(msg && ms) statusTimer = setTimeout(() => $('#status').textContent = '', ms); }
 let peekTimer = null;
-function peek(){ document.body.classList.add('peek'); clearTimeout(peekTimer); peekTimer = setTimeout(() => document.body.classList.remove('peek'), 2600); }
+function peek(){ document.body.classList.add('peek'); clearTimeout(peekTimer); if(!ratesOpen) peekTimer = setTimeout(() => document.body.classList.remove('peek'), 2600); }
 addEventListener('pointermove', peek, { passive:true }); addEventListener('pointerdown', peek, { passive:true });
 
 function openSheet(build){ const sh = $('#sheet'); sh.innerHTML = ''; build(sh); sh.scrollTop = 0; document.body.classList.add('sheet'); sh.setAttribute('aria-hidden', 'false'); const on = sh.querySelector('.on'); if(on) on.scrollIntoView({ block:'center' }); }
@@ -812,7 +876,7 @@ $('#voiceBtn').onclick = () => openSheet(sh => {
 });
 
 addEventListener('keydown', e => {
-  if(e.key === 'Escape'){ if(document.body.classList.contains('sheet')) closeSheet(); else if(S.book) closeBook(); return; }
+  if(e.key === 'Escape'){ if(document.body.classList.contains('sheet')) closeSheet(); else if(ratesOpen) closeRates(); else if(prefs.zen && S.book) exitZen(); else if(S.book) closeBook(); return; }
   if(!S.book || document.body.classList.contains('sheet') || e.metaKey || e.ctrlKey) return;
   if(e.code === 'Space'){ e.preventDefault(); S.playing ? pause() : play(); }
   else if(e.key === 'ArrowRight'){ e.preventDefault(); e.shiftKey ? goChapter(S.ch + 1) : step(1); }

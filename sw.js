@@ -2,7 +2,7 @@
 // 1. Keeps the app shell on the device, so it opens with no connection.
 // 2. Adds the isolation headers that allow multi-threaded voice synthesis. Static hosts such as GitHub Pages cannot send them.
 // Voice model files are large and are kept by the voice workers themselves, so they pass straight through here.
-const SHELL = 'lector-shell-v1';
+const SHELL = 'lector-shell-v2';
 const FILES = ['./', 'index.html', 'manifest.webmanifest', 'lib/jszip.min.js', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
   'fonts/newsreader-latin-400-normal.woff2', 'fonts/newsreader-latin-500-normal.woff2', 'fonts/newsreader-latin-400-italic.woff2',
   'tts/common.js', 'tts/kokoro/worker.js', 'tts/kokoro/phonemizer.js', 'tts/kokoro/espeak-ng.js', 'tts/supertonic/worker.js', 'tts/ort/ort.wasm.min.js', 'tts/ort/ort-wasm-simd-threaded.js',
