@@ -1,0 +1,4 @@
+# The voice models are too large for Vercel's free plan. The app fetches them from the public repo instead.
+tts/kokoro/model
+tts/kokoro/voices
+tts/kokoro/espeak-ng.wasm

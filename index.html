@@ -42,7 +42,9 @@
 
 *{box-sizing:border-box;margin:0;padding:0}
 [hidden]{display:none!important}
-html{-webkit-text-size-adjust:100%;overscroll-behavior-y:none}
+html{-webkit-text-size-adjust:100%;overscroll-behavior-y:none;scrollbar-width:none}
+html::-webkit-scrollbar,#sheet::-webkit-scrollbar{display:none}
+#sheet{scrollbar-width:none}
 body{background:var(--bg);color:var(--ink);font-family:var(--ui);-webkit-font-smoothing:antialiased;transition:background .4s}
 body.reading{background:var(--card)}
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
@@ -126,7 +128,7 @@ body.playing #page .s.on,body.held #page .s.on{color:var(--ink)}
 
 /* ---------- control ---------- */
 #dock{position:fixed;left:50%;transform:translateX(-50%);z-index:26;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:6px;border-radius:999px;isolation:isolate}
-#dock::before{content:"";position:absolute;inset:0;border-radius:999px;background:var(--bg);box-shadow:var(--shadow);z-index:-1}
+#dock::before{content:"";position:absolute;inset:0;border-radius:999px;background:var(--bg);box-shadow:var(--shadow);z-index:-1;transition:opacity .4s}
 /* Both sides share one width, so the play button never moves when they open or close. */
 .side{display:flex;align-items:center;overflow:hidden;max-width:220px;transition:max-width .5s var(--ease),opacity .3s}
 .side.l{justify-self:end}
@@ -136,7 +138,7 @@ body.playing #page .s.on,body.held #page .s.on{color:var(--ink)}
 #rateBtn{font-variant-numeric:tabular-nums;color:var(--dim)}
 body.playing:not(.peek) .side{max-width:0;opacity:0}
 body.playing:not(.peek) #back{opacity:0;pointer-events:none}
-#dot{position:relative;width:44px;height:44px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;flex:none;margin:0 2px;transition:transform .3s var(--spring)}
+#dot{position:relative;width:44px;height:44px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;flex:none;margin:0 2px;transition:transform .3s var(--spring),scale .45s var(--spring)}
 #dot:active{transform:scale(.9)}
 #dot::after{content:"";position:absolute;inset:0;border-radius:50%;border:1.5px solid var(--accent);opacity:calc(var(--amp,0)*.9);transform:scale(calc(1.12 + var(--amp,0)*.55));pointer-events:none}
 #dot svg{width:16px;height:16px;grid-area:1/1;transition:opacity .2s,transform .3s var(--spring)}
@@ -159,19 +161,12 @@ html.zen .side{max-width:0;opacity:0}
 html.zen body.playing #dot svg{opacity:0}
 #dock{bottom:calc(max(18px,env(safe-area-inset-bottom)) + var(--z) * (50dvh - 62px))}
 #dock::before{opacity:calc(1 - var(--z))}
-#dot{scale:calc(1 + var(--z) * 2.6)}
+#dot{scale:calc((1 + var(--z) * 2.6) * var(--k,1))}
+body.playing:not(.peek) #dot{--k:.78}
+html.zing #dot{--k:1;transition:transform .3s var(--spring)}
+body.playing:not(.peek) #dock::before{opacity:0}
 #dot::after{border-width:calc(1.5px / (1 + var(--z) * 2.6))}
 .orb{position:absolute;inset:-55%;border-radius:50%;z-index:-1;pointer-events:none;background:radial-gradient(circle,color-mix(in srgb,var(--accent) 70%,transparent) 0,color-mix(in srgb,var(--accent) 22%,transparent) 38%,transparent 68%);opacity:calc(var(--z) * (.35 + var(--amp,0) * .65));transform:scale(calc(.82 + var(--amp,0) * .5));transition:transform .12s linear}
-
-/* ---------- speed: choices bud out of the control and melt back ---------- */
-#rates{position:fixed;z-index:27;width:52px;height:52px;pointer-events:none}
-#rates .goo{position:absolute;inset:0;filter:url(#goo) drop-shadow(0 6px 14px rgba(0,0,0,.16))}
-#rates .goo i,#rates .lab button{position:absolute;left:0;top:0;width:52px;height:52px;border-radius:50%;transform:translateY(0) scale(.5);transition:transform .6s var(--spring),opacity .25s;transition-delay:var(--d,0s)}
-#rates .goo i{background:var(--bg)}
-#rates .lab button{display:grid;place-items:center;font-size:14px;font-variant-numeric:tabular-nums;color:var(--dim);opacity:0}
-#rates .lab button.on{color:var(--ink)}
-#rates.open .goo i,#rates.open .lab button{transform:translateY(var(--y)) scale(1)}
-#rates.open .lab button{opacity:1;pointer-events:auto}
 
 /* ---------- sheet ---------- */
 #scrim{position:fixed;inset:0;background:rgba(0,0,0,.28);opacity:0;pointer-events:none;transition:opacity .35s;z-index:40}
@@ -219,8 +214,6 @@ body.dragging::after{content:"";position:fixed;inset:0;z-index:60;background:lin
   <div class="side r"><button class="x" id="voiceBtn" aria-label="Voice"></button></div>
 </div>
 
-<svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="goo"><feGaussianBlur in="SourceGraphic" stdDeviation="7"/><feColorMatrix values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -8"/></filter></svg>
-<div id="rates" hidden><div class="goo"></div><div class="lab"></div></div>
 <div id="scrim"></div>
 <section id="sheet" aria-hidden="true"></section>
 <input type="file" id="file" accept=".epub,application/epub+zip" multiple hidden>
@@ -233,18 +226,16 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const OPS = 'http://www.idpf.org/2007/ops', XLINK = 'http://www.w3.org/1999/xlink';
 
 /* ---------- voices ---------- */
-// Two engines. Kokoro sounds the most human. Supertonic is lighter and speaks more languages.
+// One voice engine: Kokoro. Languages it does not speak use the device's own voice.
 const K_VOICES = {
   en: [['af_heart', 'Heart', 'US'], ['af_bella', 'Bella', 'US'], ['af_nicole', 'Nicole', 'US'], ['af_aoede', 'Aoede', 'US'], ['af_kore', 'Kore', 'US'], ['af_sarah', 'Sarah', 'US'], ['am_fenrir', 'Fenrir', 'US'], ['am_michael', 'Michael', 'US'], ['am_puck', 'Puck', 'US'],
        ['bf_emma', 'Emma', 'UK'], ['bf_isabella', 'Isabella', 'UK'], ['bm_george', 'George', 'UK'], ['bm_fable', 'Fable', 'UK']],
-  es: [['ef_dora', 'Dora', ''], ['em_alex', 'Alex', '']], fr: [['ff_siwis', 'Siwis', '']], it: [['if_sara', 'Sara', ''], ['im_nicola', 'Nicola', '']], pt: [['pf_dora', 'Dora', ''], ['pm_alex', 'Alex', '']]
+  es: [['ef_dora', 'Dora', ''], ['em_alex', 'Alex', ''], ['em_santa', 'Santa', '']], fr: [['ff_siwis', 'Siwis', '']], it: [['if_sara', 'Sara', ''], ['im_nicola', 'Nicola', '']], pt: [['pf_dora', 'Dora', ''], ['pm_alex', 'Alex', '']]
 };
 K_VOICES.ca = K_VOICES.es; // Catalan text, Spanish voices, Catalan pronunciation rules
-const S_VOICES = ['Alba', 'Nora', 'Iris', 'Vera', 'Lena', 'Leo', 'Marc', 'Otto', 'Teo', 'Hugo'];
-const S_LANGS = new Set('en ko ja ar bg cs da de el es et fi fr hi hr hu id it lt lv nl pl pt ro ru sk sl sv tr uk vi'.split(' '));
+const WEIGHTS = window.LECTOR_FALLBACK || 'https://raw.githubusercontent.com/frilo-io/lector/main/';
 const ENGINES = {
-  k: { label:'Natural', worker:'tts/kokoro/worker.js', manifest:{"rt":[{"file":"ort-wasm-simd-threaded.wasm","size":14848852}],"model":[{"file":"model/q8-0.bin","size":20000000},{"file":"model/q8-1.bin","size":20000000},{"file":"model/q8-2.bin","size":20000000},{"file":"model/q8-3.bin","size":20000000},{"file":"model/q8-4.bin","size":12361271}],"voices":["af_heart","af_bella","af_nicole","af_aoede","af_kore","af_sarah","am_fenrir","am_michael","am_puck","bf_emma","bf_isabella","bm_george","bm_fable","ef_dora","em_alex","ff_siwis","if_sara","im_nicola","pf_dora","pm_alex"]} },
-  s: { label:'Fast', worker:'tts/supertonic/worker.js', manifest:{"idx":[{"file":"w/idx-0.bin","size":262144}],"voice":[{"file":"w/voice-0.bin","size":517168}],"dp":[{"file":"w/dp-0.bin","size":3700147}],"te":[{"file":"w/te-0.bin","size":20000000},{"file":"w/te-1.bin","size":16416150}],"ve":[{"file":"w/ve-0.bin","size":20000000},{"file":"w/ve-1.bin","size":20000000},{"file":"w/ve-2.bin","size":20000000},{"file":"w/ve-3.bin","size":18400833}],"voc":[{"file":"w/voc-0.bin","size":20000000},{"file":"w/voc-1.bin","size":5991073}],"rt":[{"file":"ort-wasm-simd-threaded.wasm","size":14848852}]} }
+  k: { worker:'tts/kokoro/worker.js', manifest:{"rt":[{"file":"ort-wasm-simd-threaded.wasm","size":14848852}],"model":[{"file":"model/q8-0.bin","size":20000000},{"file":"model/q8-1.bin","size":20000000},{"file":"model/q8-2.bin","size":20000000},{"file":"model/q8-3.bin","size":20000000},{"file":"model/q8-4.bin","size":12361271}],"voices":["af_heart","af_bella","af_nicole","af_aoede","af_kore","af_sarah","am_fenrir","am_michael","am_puck","bf_emma","bf_isabella","bm_george","bm_fable","ef_dora","em_alex","em_santa","ff_siwis","if_sara","im_nicola","pf_dora","pm_alex"]} },
 };
 const RATES = [0.8, 0.9, 1, 1.1, 1.2, 1.35, 1.5];
 
@@ -456,7 +447,7 @@ async function nowPlaying(meta){
     navigator.mediaSession.metadata = new MediaMetadata({ title:meta.title, artist:meta.author || '', album:'Lector', artwork:art });
   }catch(e){}
 }
-function closeBook(){ closeRates(); halt(); flushPos(); document.body.classList.remove('held'); store.set('lector:open', null); S.book = null; document.title = 'Lector'; closeSheet(); renderHome(); show('home'); }
+function closeBook(){ halt(); flushPos(); document.body.classList.remove('held'); store.set('lector:open', null); S.book = null; document.title = 'Lector'; closeSheet(); renderHome(); show('home'); }
 $('#back').onclick = closeBook;
 
 const BLOCKS = new Set('address article aside blockquote body dd details div dl dt figcaption figure footer form h1 h2 h3 h4 h5 h6 header hgroup li main nav ol p pre section table tbody thead tfoot tr td th caption ul'.split(' '));
@@ -638,9 +629,9 @@ addEventListener('pagehide', flushPos);
 
 /* ---------- neural voice ---------- */
 const fam = () => (S.lang || 'en').slice(0, 2);
-function voicesFor(f){ return { k: (K_VOICES[f] || []).map(([id, name, tag]) => ({ e:'k', id, name, tag })), s: S_LANGS.has(f) ? S_VOICES.map((name, id) => ({ e:'s', id, name, tag:'' })) : [] }; }
+const voicesFor = f => (K_VOICES[f] || []).map(([id, name, tag]) => ({ e:'k', id, name, tag }));
 function voice(){
-  const v = voicesFor(fam()), all = [...v.k, ...v.s]; if(!all.length) return null;
+  const all = voicesFor(fam()); if(!all.length) return null;
   return all.find(x => x.e + ':' + x.id === prefs.voice[fam()]) || (fam() === 'en' && /gb|uk|au|nz|ie/.test(S.lang) && all.find(x => x.id === 'bf_emma')) || all[0];
 }
 const vkey = v => v.e + ':' + v.id;
@@ -662,7 +653,7 @@ const TTS = {
       else if(m.type === 'audio'){ this.stats = { rtf:m.rtf, steps:m.steps, ms:m.ms }; this.settle(m.id, { a:m.audio, sr:m.rate }); }
       else if(m.type === 'genError'){ console.warn(m.message); this.settle(m.id, null); }
       else if(m.type === 'cleared') m.ids.forEach(id => this.settle(id, null, true)); };
-    this.w.postMessage({ type:'init', manifest:ENGINES[v.e].manifest });
+    this.w.postMessage({ type:'init', manifest:Object.assign({ fallback:WEIGHTS }, ENGINES[v.e].manifest) });
   },
   stop(){ try{ this.w && this.w.terminate(); }catch(e){} this.w = null; for(const [, p] of this.pend) p.resolve(null); this.pend.clear(); this.ids.clear(); this.cache.clear(); this.state = 'idle'; this.engine = null; this.info = this.stats = null; },
   settle(id, audio, dropped){ const key = this.ids.get(id); if(key == null) return; this.ids.delete(id); const p = this.pend.get(key); this.pend.delete(key);
@@ -677,7 +668,7 @@ const TTS = {
     return promise;
   },
   key(i){ return [S.book.id, S.ch, i, vkey(voice()), prefs.rate].join('|'); },
-  sentence(i, priority){ const s = S.sents[i]; if(!s || !/[\p{L}\p{N}]/u.test(s.text)) return Promise.resolve(null); this.start(); if(!this.w) return Promise.resolve(null); const v = voice(); return this.get(this.key(i), s.text, v.id, v.e === 'k' ? kLang(v.id) : fam(), priority); },
+  sentence(i, priority){ const s = S.sents[i]; if(!s || !/[\p{L}\p{N}]/u.test(s.text)) return Promise.resolve(null); this.start(); if(!this.w) return Promise.resolve(null); const v = voice(); return this.get(this.key(i), s.text, v.id, kLang(v.id), priority); },
   // Keep rendering ahead of the listener, playing or not, until about four minutes are ready.
   ahead(){ let t = 0; if(!S.book) return 0; for(let i = S.idx; i < S.sents.length; i++){ const a = this.cache.get(this.key(i)); if(a) t += a.a.length / a.sr; else if(/[\p{L}\p{N}]/u.test(S.sents[i].text)) break; } return t; },
   fill(){
@@ -813,28 +804,14 @@ function setEngine(){
 }
 $('#dot').onclick = () => S.playing ? pause() : play();
 const fmtRate = r => String(r).replace(/^0/, '') + '×';
-let ratesOpen = false;
 function setRate(r){ if(r === prefs.rate) return; prefs.rate = r; savePrefs(); setEngine(); TTS.trim(); if(S.playing || S.paused) jump(S.idx); else TTS.fill(); }
-function openRates(){
-  const box = $('#rates'), goo = box.querySelector('.goo'), lab = box.querySelector('.lab'), b = $('#rateBtn').getBoundingClientRect();
-  box.style.left = (b.left + b.width / 2 - 26) + 'px'; box.style.top = (b.top + b.height / 2 - 26) + 'px';
-  goo.innerHTML = '<i style="--y:0px"></i>'; lab.innerHTML = '';
-  const base = el('button', 'on', fmtRate(prefs.rate)); base.style.setProperty('--y', '0px'); base.setAttribute('aria-label', 'Close speed'); base.onclick = closeRates; lab.appendChild(base);
-  RATES.forEach((r, k) => { const y = -(k + 1) * 56 - 6 + 'px', d = k * .03 + 's';
-    const blob = el('i'); blob.style.setProperty('--y', y); blob.style.setProperty('--d', d); goo.appendChild(blob);
-    const btn = el('button', r === prefs.rate ? 'on' : '', fmtRate(r)); btn.style.setProperty('--y', y); btn.style.setProperty('--d', d); btn.setAttribute('aria-label', 'Speed ' + r);
-    btn.onclick = () => { setRate(r); closeRates(); }; lab.appendChild(btn); });
-  box.hidden = false; ratesOpen = true; clearTimeout(peekTimer); document.body.classList.add('peek');
-  requestAnimationFrame(() => requestAnimationFrame(() => box.classList.add('open')));
-}
-function closeRates(){ if(!ratesOpen) return; const box = $('#rates'); ratesOpen = false; box.classList.remove('open'); setTimeout(() => { if(!ratesOpen) box.hidden = true; }, 650); peek(); }
-$('#rateBtn').onclick = () => ratesOpen ? closeRates() : openRates();
-addEventListener('pointerdown', e => { if(ratesOpen && !e.target.closest('#rates') && !e.target.closest('#rateBtn')) closeRates(); }, true);
+$('#rateBtn').onclick = () => openSheet(sh => RATES.forEach(r => { const b = row(fmtRate(r), '', r === prefs.rate); b.onclick = () => { closeSheet(); setRate(r); }; sh.appendChild(b); }));
 let statusTimer = null;
 function say(msg, ms = 3000){ $('#status').textContent = msg; clearTimeout(statusTimer); if(msg && ms) statusTimer = setTimeout(() => $('#status').textContent = '', ms); }
 let peekTimer = null;
-function peek(){ document.body.classList.add('peek'); clearTimeout(peekTimer); if(!ratesOpen) peekTimer = setTimeout(() => document.body.classList.remove('peek'), 2600); }
-addEventListener('pointermove', peek, { passive:true }); addEventListener('pointerdown', peek, { passive:true });
+function peek(){ document.body.classList.add('peek'); clearTimeout(peekTimer); peekTimer = setTimeout(() => document.body.classList.remove('peek'), 2600); }
+addEventListener('pointermove', e => { if(e.pointerType === 'mouse' && (e.clientY > innerHeight - 130 || e.clientY < 90)) peek(); }, { passive:true });
+addEventListener('pointerdown', e => { if(e.pointerType !== 'mouse' || e.target.closest('#dock')) peek(); }, { passive:true });
 
 function openSheet(build){ const sh = $('#sheet'); sh.innerHTML = ''; build(sh); sh.scrollTop = 0; document.body.classList.add('sheet'); sh.setAttribute('aria-hidden', 'false'); const on = sh.querySelector('.on'); if(on) on.scrollIntoView({ block:'center' }); }
 function closeSheet(){ document.body.classList.remove('sheet'); $('#sheet').setAttribute('aria-hidden', 'true'); }
@@ -855,28 +832,27 @@ function buildToc(sh, tab){
 $('#tocBtn').onclick = () => openSheet(sh => buildToc(sh, 'toc'));
 const SAMPLES = new Map();
 function sample(v){
-  const key = v.e === 'k' ? 'k-' + v.id : 's-' + (fam() === 'es' ? 'es' : 'en') + '-' + v.id;
+  const key = 'k-' + v.id;
   if(!SAMPLES.has(key)) SAMPLES.set(key, fetch('tts/samples/' + key + '.mp3').then(r => { if(!r.ok) throw new Error(r.status); return r.blob(); }).catch(e => { SAMPLES.delete(key); throw e; }));
   return SAMPLES.get(key);
 }
-function buildVoices(sh, tab){
-  sh.innerHTML = ''; const all = voicesFor(fam()), cur = voice();
-  if(all.k.length && all.s.length){ const seg = el('div', 'seg'); for(const k of ['k', 's']){ const b = el('button', k === tab ? 'on' : '', ENGINES[k].label); b.onclick = () => buildVoices(sh, k); seg.appendChild(b); } sh.appendChild(seg); }
-  (all[tab].length ? all[tab] : all.k.length ? all.k : all.s).forEach(v => { const r = row(v.name, v.tag, vkey(v) === vkey(cur));
+function buildVoices(sh){
+  const cur = voice();
+  voicesFor(fam()).forEach(v => { const r = row(v.name, v.tag, vkey(v) === vkey(cur));
     r.onclick = async () => { prefs.voice[fam()] = vkey(v); savePrefs(); setEngine(); sh.querySelectorAll('.row').forEach(x => x.classList.toggle('on', x === r));
       halt(); TTS.trim(); unlock(); TTS.start();
       try{ const t = S.token; const b = await sample(v); if(t !== S.token) return; playClip(b); TTS.fill(); }catch(e){ console.warn(e); say('That sample would not play.'); } };
     sh.appendChild(r); });
 }
 $('#voiceBtn').onclick = () => openSheet(sh => {
-  if(useNeural()) return buildVoices(sh, voice().e);
+  if(useNeural()) return buildVoices(sh);
   const list = pickSys() || [];
   if(!list.length) sh.appendChild(row('No voice for this language', '', false));
   list.forEach(v => { const r = row(v.name.replace(/^Microsoft /, ''), v.lang, v === sysVoice); r.onclick = () => { prefs.voice['sys:' + fam()] = v.name; savePrefs(); setEngine(); closeSheet(); if(S.playing) jump(S.idx); }; sh.appendChild(r); });
 });
 
 addEventListener('keydown', e => {
-  if(e.key === 'Escape'){ if(document.body.classList.contains('sheet')) closeSheet(); else if(ratesOpen) closeRates(); else if(prefs.zen && S.book) exitZen(); else if(S.book) closeBook(); return; }
+  if(e.key === 'Escape'){ if(document.body.classList.contains('sheet')) closeSheet(); else if(prefs.zen && S.book) exitZen(); else if(S.book) closeBook(); return; }
   if(!S.book || document.body.classList.contains('sheet') || e.metaKey || e.ctrlKey) return;
   if(e.code === 'Space'){ e.preventDefault(); S.playing ? pause() : play(); }
   else if(e.key === 'ArrowRight'){ e.preventDefault(); e.shiftKey ? goChapter(S.ch + 1) : step(1); }

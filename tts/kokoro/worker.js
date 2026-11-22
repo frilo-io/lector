@@ -19,6 +19,7 @@ const voices = new Map();
 
 async function init(manifest){
   const started = performance.now();
+  load.remote(new URL('../../', import.meta.url).href, manifest.fallback);
   try{ caches.delete('lector-kokoro-v1'); }catch(e){}
   const files = [...manifest.rt, ...manifest.model];
   load.expect(files.reduce((a, p) => a + p.size, 0));
