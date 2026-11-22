@@ -3,3 +3,4 @@ tts/kokoro/model
 tts/kokoro/voices
 tts/kokoro/espeak-ng.wasm
 tts/supertonic/w
+tts/piper/model
